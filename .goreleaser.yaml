@@ -46,4 +46,4 @@ brews:
       owner: libops
       name: homebrew
     dependencies:
-      - name: "libops/tap/sitectl"
+      - name: "libops/homebrew/sitectl"

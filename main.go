@@ -8,7 +8,7 @@ import (
 func main() {
 	sdk := plugin.NewSDK(plugin.Metadata{
 		Name:        "drupal",
-		Version:     "1.0.0",
+		Version:     "v0.0.3",
 		Description: "Drupal utilities and migration tools",
 		Author:      "libops",
 	})
