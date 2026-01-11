@@ -19,7 +19,6 @@ func init() {
 func RegisterCommands(s *plugin.SDK) {
 	sdk = s
 	sdk.AddCommand(backupCmd)
-	sdk.AddCommand(execCmd)
 	sdk.AddCommand(drushCmd)
 	sdk.AddCommand(loginCmd)
 }
