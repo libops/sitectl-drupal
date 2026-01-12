@@ -9,7 +9,7 @@ A [sitectl](https://github.com/libops/sitectl) plugin for drupal websites.
 You can install `sitectl-drupal` using homebrew
 
 ```bash
-brew tap libops/homebrew
+brew tap libops/homebrew https://github.com/libops/homebrew
 brew install libops/homebrew/sitectl-drupal
 ```
 
