@@ -123,28 +123,66 @@ func NewClient(opts ...ClientOption) *Client {
 
 // FetchNode fetches a single node from the Drupal API and attaches the registry.
 func (c *Client) FetchNode(url string) (*Node, error) {
+	var node Node
+	if err := c.fetch(url, &node); err != nil {
+		return nil, err
+	}
+	node.SetRegistry(c.Registry)
+	return &node, nil
+}
+
+// FetchTerm fetches a single taxonomy term from the Drupal API and attaches the registry.
+func (c *Client) FetchTerm(url string) (*Term, error) {
+	var term Term
+	if err := c.fetch(url, &term); err != nil {
+		return nil, err
+	}
+	term.SetRegistry(c.Registry)
+	return &term, nil
+}
+
+// FetchMedia fetches a single media entity from the Drupal API and attaches the registry.
+func (c *Client) FetchMedia(url string) (*Media, error) {
+	var media Media
+	if err := c.fetch(url, &media); err != nil {
+		return nil, err
+	}
+	media.SetRegistry(c.Registry)
+	return &media, nil
+}
+
+// FetchUser fetches a single user from the Drupal API and attaches the registry.
+func (c *Client) FetchUser(url string) (*User, error) {
+	var user User
+	if err := c.fetch(url, &user); err != nil {
+		return nil, err
+	}
+	user.SetRegistry(c.Registry)
+	return &user, nil
+}
+
+// fetch is a helper that performs an HTTP GET and decodes JSON
+func (c *Client) fetch(url string, v any) error {
 	req, err := c.newRequest("GET", url)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("fetch failed: %w", err)
+		return fmt.Errorf("fetch failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status: %s", resp.Status)
+		return fmt.Errorf("unexpected status: %s", resp.Status)
 	}
 
-	var node Node
-	if err := json.NewDecoder(resp.Body).Decode(&node); err != nil {
-		return nil, fmt.Errorf("decode failed: %w", err)
+	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+		return fmt.Errorf("decode failed: %w", err)
 	}
 
-	node.SetRegistry(c.Registry)
-	return &node, nil
+	return nil
 }
 
 // newRequest creates an HTTP request with authentication if configured
@@ -163,10 +201,13 @@ func (c *Client) newRequest(method, url string) (*http.Request, error) {
 
 // ValidateConfig checks if bundle configuration loaded successfully
 func (c *Client) ValidateConfig() error {
-	if len(c.Registry.bundles) == 0 {
-		return ErrNoBundles
+	// Check if any entity type has bundles registered
+	for _, et := range c.Registry.ListAllEntityTypes() {
+		if len(c.Registry.ListBundles(et)) > 0 {
+			return nil
+		}
 	}
-	return nil
+	return ErrNoBundles
 }
 
 // Errors

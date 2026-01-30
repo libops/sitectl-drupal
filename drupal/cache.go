@@ -150,10 +150,14 @@ func SaveRegistryCache(configPath string, registry *BundleRegistry) error {
 		return err
 	}
 
-	// Collect all bundles
-	bundles := make([]BundleDefinition, 0, len(registry.bundles))
-	for _, b := range registry.bundles {
-		bundles = append(bundles, *b)
+	// Collect all bundles from all entity types
+	var bundles []BundleDefinition
+	for _, et := range registry.ListAllEntityTypes() {
+		for _, name := range registry.ListBundles(et) {
+			if def, ok := registry.GetBundle(et, name); ok {
+				bundles = append(bundles, *def)
+			}
+		}
 	}
 
 	cached := CachedBundleConfig{

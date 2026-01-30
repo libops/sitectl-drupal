@@ -118,7 +118,7 @@ Requires --bundle-config to be set with bundle definitions.`,
 			return fmt.Errorf("no bundle definitions loaded - use --bundle-config")
 		}
 
-		def, ok := registry.GetBundle(node.Bundle())
+		def, ok := registry.GetNodeBundle(node.Bundle())
 		if !ok {
 			return fmt.Errorf("unknown bundle %q - not in registry", node.Bundle())
 		}
@@ -153,31 +153,39 @@ Shows bundle names, descriptions, field counts, and required fields.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := getClient(cmd)
 
-		bundles := client.Registry.ListBundles()
-		if len(bundles) == 0 {
+		entityTypes := client.Registry.ListAllEntityTypes()
+		if len(entityTypes) == 0 {
 			fmt.Println("No bundles registered")
 			fmt.Println("Use --bundle-config to load bundle definitions")
 			return nil
 		}
 
 		fmt.Println("Registered bundles:")
-		for _, name := range bundles {
-			def, _ := client.Registry.GetBundle(name)
-			fmt.Printf("\n  %s (%s)\n", def.Name, def.MachineName)
-			if def.Description != "" {
-				fmt.Printf("    %s\n", def.Description)
+		for _, entityType := range entityTypes {
+			bundles := client.Registry.ListBundles(entityType)
+			if len(bundles) == 0 {
+				continue
 			}
-			fmt.Printf("    Fields: %d\n", len(def.Fields))
 
-			// List required fields
-			var required []string
-			for _, f := range def.Fields {
-				if f.Required {
-					required = append(required, f.Name)
+			fmt.Printf("\n%s:\n", entityType)
+			for _, name := range bundles {
+				def, _ := client.Registry.GetBundle(entityType, name)
+				fmt.Printf("\n  %s (%s)\n", def.Name, def.MachineName)
+				if def.Description != "" {
+					fmt.Printf("    %s\n", def.Description)
 				}
-			}
-			if len(required) > 0 {
-				fmt.Printf("    Required: %v\n", required)
+				fmt.Printf("    Fields: %d\n", len(def.Fields))
+
+				// List required fields
+				var required []string
+				for _, f := range def.Fields {
+					if f.Required {
+						required = append(required, f.Name)
+					}
+				}
+				if len(required) > 0 {
+					fmt.Printf("    Required: %v\n", required)
+				}
 			}
 		}
 

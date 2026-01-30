@@ -44,7 +44,7 @@ func (n *Node) Validate() []string {
 	if n.registry == nil {
 		return nil
 	}
-	return n.registry.ValidateNode(n)
+	return n.registry.ValidateEntity(EntityTypeNode, n.Bundle(), n.HasField)
 }
 
 // GetFieldType returns the type of a field on this node's bundle.
@@ -53,7 +53,7 @@ func (n *Node) GetFieldType(fieldName string) (FieldType, bool) {
 	if n.registry == nil {
 		return "", false
 	}
-	return n.registry.GetFieldType(n.Bundle(), fieldName)
+	return n.registry.GetFieldType(EntityTypeNode, n.Bundle(), fieldName)
 }
 
 // GetFieldDefinition returns the full field definition for a field on this node's bundle.
@@ -62,7 +62,12 @@ func (n *Node) GetFieldDefinition(fieldName string) (*FieldDefinition, bool) {
 	if n.registry == nil {
 		return nil, false
 	}
-	return n.registry.GetField(n.Bundle(), fieldName)
+	return n.registry.GetField(EntityTypeNode, n.Bundle(), fieldName)
+}
+
+// EntityType returns the entity type for nodes
+func (n *Node) EntityType() EntityType {
+	return EntityTypeNode
 }
 
 // Bundle returns the bundle (content type) machine name
