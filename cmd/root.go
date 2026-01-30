@@ -21,4 +21,5 @@ func RegisterCommands(s *plugin.SDK) {
 	sdk.AddCommand(backupCmd)
 	sdk.AddCommand(drushCmd)
 	sdk.AddCommand(loginCmd)
+	sdk.AddCommand(nodeCmd)
 }
