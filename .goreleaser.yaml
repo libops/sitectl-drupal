@@ -47,3 +47,22 @@ brews:
       name: homebrew
     dependencies:
       - name: "libops/homebrew/sitectl"
+nfpms:
+  - id: sitectl-drupal
+    package_name: sitectl-drupal
+    file_name_template: "{{ .ConventionalFileName }}"
+    vendor: libops
+    homepage: "https://github.com/libops/sitectl-drupal"
+    description: "A sitectl plugin for drupal websites"
+    maintainer: "Joe Corall <joe@libops.io>"
+    license: "MIT"
+    formats:
+      - apk
+      - deb
+      - rpm
+    mtime: "{{ .CommitDate }}"
+    builds:
+      - sitectl-drupal
+    dependencies:
+      - sitectl
+
