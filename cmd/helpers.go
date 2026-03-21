@@ -33,7 +33,7 @@ func getDrupalContainer(cmd *cobra.Command, args []string) (filteredArgs []strin
 	}
 
 	// Get the Drupal container name
-	containerName, err = cli.GetContainerName(ctx, *drupalServiceName)
+	containerName, err = cli.GetContainerNameContext(cmd.Context(), ctx, *drupalServiceName)
 	if err != nil {
 		cli.Close()
 		return nil, nil, nil, "", err
@@ -68,7 +68,7 @@ func getDrupalContainerFromFlags(cmd *cobra.Command) (ctx *config.Context, cli *
 	}
 
 	// Get the Drupal container name
-	containerName, err = cli.GetContainerName(ctx, *drupalServiceName)
+	containerName, err = cli.GetContainerNameContext(cmd.Context(), ctx, *drupalServiceName)
 	if err != nil {
 		cli.Close()
 		return nil, nil, "", err

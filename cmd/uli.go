@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -39,7 +38,7 @@ Examples:
 		var stdout, stderr bytes.Buffer
 		drushCmd := []string{"bash", "-c", fmt.Sprintf("drush uli --uid=%d", uid)}
 
-		exitCode, err := cli.Exec(context.Background(), docker.ExecOptions{
+		exitCode, err := cli.Exec(cmd.Context(), docker.ExecOptions{
 			Container:    containerName,
 			Cmd:          drushCmd,
 			AttachStdout: true,
