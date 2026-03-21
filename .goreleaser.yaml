@@ -6,6 +6,8 @@ builds:
   - binary: sitectl-drupal
     env:
       - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X main.version={{ .Version }} -X main.commit={{ .Commit }} -X main.date={{ .Date }}
     goos:
       - linux
       - windows
@@ -65,4 +67,3 @@ nfpms:
       - sitectl-drupal
     dependencies:
       - sitectl
-
