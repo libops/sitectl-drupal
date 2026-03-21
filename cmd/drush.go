@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/kballard/go-shellquote"
@@ -41,7 +40,7 @@ Examples:
 		drushCmd := []string{"bash", "-c", fmt.Sprintf("drush %s", shellquote.Join(filteredArgs...))}
 
 		// Execute the command interactively using SDK helper
-		exitCode, err := sdk.ExecInContainerInteractive(context.Background(), containerName, drushCmd)
+		exitCode, err := cli.ExecInteractive(cmd.Context(), containerName, drushCmd)
 		if err != nil {
 			return err
 		}

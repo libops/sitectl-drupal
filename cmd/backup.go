@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -58,7 +57,7 @@ Example:
 			cmdArgs = append(cmdArgs, extraFlag)
 		}
 
-		exitCode, err := sdk.ExecInContainerInteractive(context.Background(), containerName, cmdArgs)
+		exitCode, err := cli.ExecInteractive(cmd.Context(), containerName, cmdArgs)
 		if err != nil {
 			return err
 		}

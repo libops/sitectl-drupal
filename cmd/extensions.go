@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -11,6 +12,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/kballard/go-shellquote"
 	"github.com/libops/sitectl/pkg/config"
 	"github.com/libops/sitectl/pkg/docker"
 	"github.com/libops/sitectl/pkg/plugin"
@@ -91,7 +93,7 @@ var debugExtensionCmd = &cobra.Command{
 	Short:  "Internal debug extension command",
 	Hidden: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		rendered, err := renderDrupalDebug()
+		rendered, err := renderDrupalDebug(cmd.Context())
 		if err != nil {
 			return err
 		}
@@ -111,7 +113,8 @@ func init() {
 	debugExtensionCmd.Flags().StringVar(&drupalRootfsPath, "drupal-rootfs", "drupal/rootfs/var/www/drupal", "Drupal rootfs path override")
 }
 
-func renderDrupalDebug() (string, error) {
+func renderDrupalDebug(runCtx context.Context) (string, error) {
+	slog.Debug("starting plugin debug", "plugin", "drupal")
 	if sdk == nil {
 		return "", fmt.Errorf("plugin sdk is not initialized")
 	}
@@ -119,13 +122,17 @@ func renderDrupalDebug() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	files, err := plugin.NewFileAccessor(ctx)
+	slog.Debug("resolved plugin context", "plugin", "drupal", "context", ctx.Name, "project_dir", ctx.ProjectDir)
+	slog.Debug("creating file accessor", "plugin", "drupal")
+	files, err := sdk.GetFileAccessor()
 	if err != nil {
 		return "", err
 	}
 	defer files.Close()
 
+	slog.Debug("resolving drupal root", "plugin", "drupal", "rootfs", drupalRootfsPath)
 	drupalRoot := resolveDrupalRoot(files, ctx.ProjectDir, drupalRootfsPath)
+	slog.Debug("resolved drupal root", "plugin", "drupal", "drupal_root", drupalRoot)
 	configDir := filepath.Join(drupalRoot, "config", "sync")
 	body := []string{
 		debugDivider(),
@@ -141,15 +148,19 @@ func renderDrupalDebug() (string, error) {
 	}
 
 	if strings.TrimSpace(drupalRoot) == "" {
+		slog.Debug("drupal root unavailable; skipping extension scan", "plugin", "drupal")
 		body = append(body, "", "Installed modules: unavailable")
 		return renderDebugPanel("drupal", strings.Join(body, "\n")), nil
 	}
 
-	modules, themes, err := readCoreExtension(files, filepath.Join(configDir, "core.extension.yml"))
+	slog.Debug("reading core.extension.yml", "plugin", "drupal", "path", filepath.Join(configDir, "core.extension.yml"))
+	modules, themes, err := readCoreExtension(runCtx, files, filepath.Join(configDir, "core.extension.yml"))
 	if err != nil {
 		return "", err
 	}
-	cachePageSummary, err := renderCachePageSummary()
+	slog.Debug("read installed extensions", "plugin", "drupal", "modules", len(modules), "themes", len(themes))
+	slog.Debug("rendering cache_page summary", "plugin", "drupal")
+	cachePageSummary, err := renderCachePageSummary(runCtx)
 	if err != nil {
 		body = append(body, "", debugDivider(), "", debugTitleStyle.Render("Cache Page"), "", formatDebugRows([]debugRow{
 			{Label: "Status", Value: renderStatus("warning")},
@@ -166,18 +177,19 @@ func renderDrupalDebug() (string, error) {
 	configLines = append(configLines, formatListLines(themes, 3)...)
 	body = append(body, "", strings.Join(configLines, "\n"))
 
+	slog.Debug("finished plugin debug", "plugin", "drupal")
 	return renderDebugPanel("drupal", strings.Join(body, "\n")), nil
 }
 
-func renderCachePageSummary() (string, error) {
-	_, cli, containerName, err := getDrupalContainerForSDK()
+func renderCachePageSummary(runCtx context.Context) (string, error) {
+	_, cli, containerName, err := getDrupalContainerForSDK(runCtx)
 	if err != nil {
 		return "", err
 	}
 	defer cli.Close()
 
 	query := "SELECT COALESCE(data_length + index_length, 0) FROM information_schema.TABLES WHERE table_schema = DATABASE() AND table_name = 'cache_page';"
-	output, err := execDrupalCommandCapture(cli, containerName, []string{"drush", "sql:query", query, "--extra=--batch --skip-column-names"})
+	output, err := execDrupalCommandCapture(runCtx, cli, containerName, []string{"drush", "sql:query", query, "--extra=--batch", "--extra=--skip-column-names"})
 	if err != nil {
 		return "", err
 	}
@@ -198,7 +210,7 @@ func renderCachePageSummary() (string, error) {
 	return formatDebugRows(rows), nil
 }
 
-func getDrupalContainerForSDK() (ctx *config.Context, cli *docker.DockerClient, containerName string, err error) {
+func getDrupalContainerForSDK(runCtx context.Context) (ctx *config.Context, cli *docker.DockerClient, containerName string, err error) {
 	if sdk == nil {
 		return nil, nil, "", fmt.Errorf("plugin sdk is not initialized")
 	}
@@ -213,7 +225,7 @@ func getDrupalContainerForSDK() (ctx *config.Context, cli *docker.DockerClient, 
 		return nil, nil, "", err
 	}
 
-	containerName, err = cli.GetContainerName(ctx, *drupalServiceName)
+	containerName, err = cli.GetContainerNameContext(runCtx, ctx, *drupalServiceName)
 	if err != nil {
 		cli.Close()
 		return nil, nil, "", err
@@ -222,13 +234,17 @@ func getDrupalContainerForSDK() (ctx *config.Context, cli *docker.DockerClient, 
 	return ctx, cli, containerName, nil
 }
 
-func execDrupalCommandCapture(cli *docker.DockerClient, containerName string, cmd []string) (string, error) {
+func execDrupalCommandCapture(runCtx context.Context, cli *docker.DockerClient, containerName string, cmd []string) (string, error) {
+	slog.Debug(strings.Join(cmd, " "), "plugin", "drupal", "container", containerName)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	exitCode, err := cli.Exec(context.Background(), docker.ExecOptions{
+	wrappedCmd := []string{"bash", "-lc", fmt.Sprintf("cd /var/www/drupal && %s", shellquote.Join(cmd...))}
+
+	exitCode, err := cli.Exec(runCtx, docker.ExecOptions{
 		Container:    containerName,
-		Cmd:          cmd,
+		Cmd:          wrappedCmd,
+		WorkingDir:   "/var/www/drupal",
 		AttachStdout: true,
 		AttachStderr: true,
 		Stdout:       &stdout,
@@ -295,8 +311,8 @@ func resolveDrupalRoot(files *plugin.FileAccessor, projectDir, drupalRootPath st
 	return ""
 }
 
-func readCoreExtension(files *plugin.FileAccessor, path string) ([]string, []string, error) {
-	data, err := files.ReadFile(path)
+func readCoreExtension(runCtx context.Context, files *plugin.FileAccessor, path string) ([]string, []string, error) {
+	data, err := files.ReadFileContext(runCtx, path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil, nil
