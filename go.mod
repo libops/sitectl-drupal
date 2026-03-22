@@ -4,8 +4,7 @@ go 1.25.8
 
 require (
 	charm.land/lipgloss/v2 v2.0.2
-	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
-	github.com/libops/sitectl v0.12.0
+	github.com/libops/sitectl v0.13.0
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/term v0.39.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -40,6 +39,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/joho/godotenv v1.5.1 // indirect
+	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
 	github.com/mattn/go-runewidth v0.0.20 // indirect
