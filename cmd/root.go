@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	pluginjobs "github.com/libops/sitectl-drupal/pkg/jobs"
 	"github.com/libops/sitectl/pkg/plugin"
 )
 
@@ -11,16 +12,16 @@ var (
 
 func init() {
 	loginCmd.Flags().Uint("uid", 1, "Drupal user ID to provide a direct login link for")
-
-	backupCmd.Flags().StringVarP(drupalServiceName, "drupal-service", "d", "drupal", "The name of the drupal service in docker compose")
 }
 
 // RegisterCommands registers all drupal commands with the plugin SDK
 func RegisterCommands(s *plugin.SDK) {
 	sdk = s
-	sdk.AddCommand(backupCmd)
+	pluginjobs.Register(s)
+	sdk.AddCommand(sdk.GetMetadataCommand())
 	sdk.AddCommand(componentExtensionCmd)
 	sdk.AddCommand(debugExtensionCmd)
 	sdk.AddCommand(drushCmd)
 	sdk.AddCommand(loginCmd)
+	sdk.AddCommand(syncCmd)
 }

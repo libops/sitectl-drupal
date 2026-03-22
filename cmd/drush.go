@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/kballard/go-shellquote"
+	"github.com/libops/sitectl/pkg/docker"
 	"github.com/spf13/cobra"
 )
 
@@ -30,17 +30,22 @@ Examples:
   sitectl drush sqlq "SHOW TABLES"          # Run SQL query
   sitectl drush --context prod status       # Check status on prod context`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		filteredArgs, _, cli, containerName, err := getDrupalContainer(cmd, args)
+		filteredArgs, ctx, cli, containerName, err := getDrupalContainer(cmd, args)
 		if err != nil {
 			return err
 		}
 		defer cli.Close()
 
-		// Build the drush command with arguments
-		drushCmd := []string{"bash", "-c", fmt.Sprintf("drush %s", shellquote.Join(filteredArgs...))}
-
-		// Execute the command interactively using SDK helper
-		exitCode, err := cli.ExecInteractive(cmd.Context(), containerName, drushCmd)
+		drushArgs := append([]string{"drush"}, filteredArgs...)
+		exitCode, err := cli.Exec(cmd.Context(), docker.ExecOptions{
+			Container:    containerName,
+			Cmd:          drushArgs,
+			WorkingDir:   ctx.EffectiveDrupalContainerRoot(),
+			AttachStdin:  true,
+			AttachStdout: true,
+			AttachStderr: true,
+			Tty:          true,
+		})
 		if err != nil {
 			return err
 		}
