@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"github.com/kballard/go-shellquote"
 	"github.com/libops/sitectl/pkg/config"
 	"github.com/libops/sitectl/pkg/docker"
 	"github.com/libops/sitectl/pkg/plugin"
@@ -110,7 +109,7 @@ func init() {
 	componentExtensionCmd.AddCommand(componentExtensionReconcileCmd)
 	componentExtensionCmd.AddCommand(componentExtensionSetCmd)
 
-	debugExtensionCmd.Flags().StringVar(&drupalRootfsPath, "drupal-rootfs", "drupal/rootfs/var/www/drupal", "Drupal rootfs path override")
+	debugExtensionCmd.Flags().StringVar(&drupalRootfsPath, "drupal-rootfs", "", "Drupal rootfs path override")
 }
 
 func renderDrupalDebug(runCtx context.Context) (string, error) {
@@ -130,8 +129,12 @@ func renderDrupalDebug(runCtx context.Context) (string, error) {
 	}
 	defer files.Close()
 
-	slog.Debug("resolving drupal root", "plugin", "drupal", "rootfs", drupalRootfsPath)
-	drupalRoot := resolveDrupalRoot(files, ctx.ProjectDir, drupalRootfsPath)
+	rootfs := strings.TrimSpace(drupalRootfsPath)
+	if rootfs == "" {
+		rootfs = ctx.EffectiveDrupalRootfs()
+	}
+	slog.Debug("resolving drupal root", "plugin", "drupal", "rootfs", rootfs)
+	drupalRoot := ctx.ResolveProjectPath(rootfs)
 	slog.Debug("resolved drupal root", "plugin", "drupal", "drupal_root", drupalRoot)
 	configDir := filepath.Join(drupalRoot, "config", "sync")
 	body := []string{
@@ -182,14 +185,14 @@ func renderDrupalDebug(runCtx context.Context) (string, error) {
 }
 
 func renderCachePageSummary(runCtx context.Context) (string, error) {
-	_, cli, containerName, err := getDrupalContainerForSDK(runCtx)
+	ctx, cli, containerName, err := getDrupalContainerForSDK(runCtx)
 	if err != nil {
 		return "", err
 	}
 	defer cli.Close()
 
 	query := "SELECT COALESCE(data_length + index_length, 0) FROM information_schema.TABLES WHERE table_schema = DATABASE() AND table_name = 'cache_page';"
-	output, err := execDrupalCommandCapture(runCtx, cli, containerName, []string{"drush", "sql:query", query, "--extra=--batch", "--extra=--skip-column-names"})
+	output, err := execDrupalCommandCapture(runCtx, cli, containerName, ctx.EffectiveDrupalContainerRoot(), []string{"drush", "sql:query", query, "--extra=--batch", "--extra=--skip-column-names"})
 	if err != nil {
 		return "", err
 	}
@@ -234,17 +237,15 @@ func getDrupalContainerForSDK(runCtx context.Context) (ctx *config.Context, cli 
 	return ctx, cli, containerName, nil
 }
 
-func execDrupalCommandCapture(runCtx context.Context, cli *docker.DockerClient, containerName string, cmd []string) (string, error) {
+func execDrupalCommandCapture(runCtx context.Context, cli *docker.DockerClient, containerName, containerRoot string, cmd []string) (string, error) {
 	slog.Debug(strings.Join(cmd, " "), "plugin", "drupal", "container", containerName)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	wrappedCmd := []string{"bash", "-lc", fmt.Sprintf("cd /var/www/drupal && %s", shellquote.Join(cmd...))}
-
 	exitCode, err := cli.Exec(runCtx, docker.ExecOptions{
 		Container:    containerName,
-		Cmd:          wrappedCmd,
-		WorkingDir:   "/var/www/drupal",
+		Cmd:          cmd,
+		WorkingDir:   containerRoot,
 		AttachStdout: true,
 		AttachStderr: true,
 		Stdout:       &stdout,
@@ -289,26 +290,6 @@ func humanBytes(size int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f%ciB", float64(size)/float64(div), "KMGTPE"[exp])
-}
-
-func resolveDrupalRoot(files *plugin.FileAccessor, projectDir, drupalRootPath string) string {
-	candidates := []string{}
-	if trimmed := strings.TrimSpace(drupalRootPath); trimmed != "" {
-		if filepath.IsAbs(trimmed) {
-			candidates = append(candidates, filepath.Clean(trimmed))
-		} else {
-			candidates = append(candidates, filepath.Join(projectDir, trimmed))
-		}
-	}
-	if strings.TrimSpace(projectDir) != "" {
-		candidates = append(candidates, projectDir)
-	}
-	for _, candidate := range candidates {
-		if _, err := files.ReadFile(filepath.Join(candidate, "config", "sync", "core.extension.yml")); err == nil {
-			return candidate
-		}
-	}
-	return ""
 }
 
 func readCoreExtension(runCtx context.Context, files *plugin.FileAccessor, path string) ([]string, []string, error) {

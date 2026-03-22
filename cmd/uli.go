@@ -23,7 +23,7 @@ Examples:
   sitectl drush uli              # Login as admin (user 1)
   sitectl drush uli --uid=2      # Login as user ID 2`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		_, cli, containerName, err := getDrupalContainerFromFlags(cmd)
+		ctx, cli, containerName, err := getDrupalContainerFromFlags(cmd)
 		if err != nil {
 			return err
 		}
@@ -36,11 +36,12 @@ Examples:
 
 		// Capture output to get the URL
 		var stdout, stderr bytes.Buffer
-		drushCmd := []string{"bash", "-c", fmt.Sprintf("drush uli --uid=%d", uid)}
+		drushCmd := []string{"drush", "uli", fmt.Sprintf("--uid=%d", uid)}
 
 		exitCode, err := cli.Exec(cmd.Context(), docker.ExecOptions{
 			Container:    containerName,
 			Cmd:          drushCmd,
+			WorkingDir:   ctx.EffectiveDrupalContainerRoot(),
 			AttachStdout: true,
 			AttachStderr: true,
 			Stdout:       &stdout,
