@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -27,6 +28,88 @@ const (
 	cachePageWarningThreshold = int64(1 << 30)
 	pageCacheExclusionURL     = "https://www.drupal.org/project/page_cache_exclusion"
 )
+
+var drupalCoreModules = map[string]struct{}{
+	"action":              {},
+	"announcements_feed":  {},
+	"automated_cron":      {},
+	"ban":                 {},
+	"basic_auth":          {},
+	"big_pipe":            {},
+	"block":               {},
+	"block_content":       {},
+	"book":                {},
+	"breakpoint":          {},
+	"ckeditor5":           {},
+	"comment":             {},
+	"config":              {},
+	"config_translation":  {},
+	"contact":             {},
+	"content_moderation":  {},
+	"content_translation": {},
+	"contextual":          {},
+	"datetime":            {},
+	"datetime_range":      {},
+	"dblog":               {},
+	"dynamic_page_cache":  {},
+	"editor":              {},
+	"field":               {},
+	"field_layout":        {},
+	"field_ui":            {},
+	"file":                {},
+	"filter":              {},
+	"forum":               {},
+	"help":                {},
+	"help_topics":         {},
+	"history":             {},
+	"image":               {},
+	"inline_form_errors":  {},
+	"jsonapi":             {},
+	"language":            {},
+	"layout_builder":      {},
+	"layout_discovery":    {},
+	"link":                {},
+	"locale":              {},
+	"media":               {},
+	"media_library":       {},
+	"menu_link_content":   {},
+	"menu_ui":             {},
+	"migrate":             {},
+	"migrate_drupal":      {},
+	"migrate_drupal_ui":   {},
+	"mysql":               {},
+	"navigation":          {},
+	"node":                {},
+	"options":             {},
+	"page_cache":          {},
+	"path":                {},
+	"path_alias":          {},
+	"pgsql":               {},
+	"phpass":              {},
+	"responsive_image":    {},
+	"rest":                {},
+	"sdc":                 {},
+	"search":              {},
+	"serialization":       {},
+	"settings_tray":       {},
+	"shortcut":            {},
+	"sqlite":              {},
+	"statistics":          {},
+	"syslog":              {},
+	"system":              {},
+	"taxonomy":            {},
+	"telephone":           {},
+	"text":                {},
+	"toolbar":             {},
+	"tour":                {},
+	"tracker":             {},
+	"update":              {},
+	"user":                {},
+	"views":               {},
+	"views_ui":            {},
+	"workflows":           {},
+	"workspaces":          {},
+}
 
 var (
 	debugPanelStyle = lipgloss.NewStyle().
@@ -161,6 +244,14 @@ func renderDrupalDebug(runCtx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	moduleVersionInfo, err := readComposerLockModuleVersions(runCtx, files, drupalRoot, ctx.ProjectDir)
+	if err != nil {
+		return "", err
+	}
+	composerPatches, err := readComposerPatches(runCtx, files, drupalRoot, ctx.ProjectDir)
+	if err != nil {
+		return "", err
+	}
 	slog.Debug("read installed extensions", "plugin", "drupal", "modules", len(modules), "themes", len(themes))
 	slog.Debug("rendering cache_page summary", "plugin", "drupal")
 	cachePageSummary, err := renderCachePageSummary(runCtx)
@@ -173,12 +264,25 @@ func renderDrupalDebug(runCtx context.Context) (string, error) {
 		body = append(body, "", debugDivider(), "", debugTitleStyle.Render("Cache Page"), "", cachePageSummary)
 	}
 
+	moduleLines, err := renderModuleList(runCtx, files, drupalRoot, modules, moduleVersionInfo)
+	if err != nil {
+		return "", err
+	}
+
 	configLines := []string{debugDivider(), "", debugTitleStyle.Render("Installed Extensions"), "", fmt.Sprintf("Installed modules (%d):", len(modules))}
-	configLines = append(configLines, formatListLines(modules, 3)...)
+	configLines = append(configLines, moduleLines...)
 	configLines = append(configLines, "")
 	configLines = append(configLines, fmt.Sprintf("Installed themes (%d):", len(themes)))
 	configLines = append(configLines, formatListLines(themes, 3)...)
 	body = append(body, "", strings.Join(configLines, "\n"))
+
+	patchLines := []string{debugDivider(), "", debugTitleStyle.Render("Composer Patches"), ""}
+	if strings.TrimSpace(composerPatches) == "" {
+		patchLines = append(patchLines, "  none")
+	} else {
+		patchLines = append(patchLines, indentLines(composerPatches, "  "))
+	}
+	body = append(body, "", strings.Join(patchLines, "\n"))
 
 	slog.Debug("finished plugin debug", "plugin", "drupal")
 	return renderDebugPanel("drupal", strings.Join(body, "\n")), nil
@@ -191,26 +295,36 @@ func renderCachePageSummary(runCtx context.Context) (string, error) {
 	}
 	defer cli.Close()
 
-	query := "SELECT COALESCE(data_length + index_length, 0) FROM information_schema.TABLES WHERE table_schema = DATABASE() AND table_name = 'cache_page';"
-	output, err := execDrupalCommandCapture(runCtx, cli, containerName, ctx.EffectiveDrupalContainerRoot(), []string{"drush", "sql:query", query, "--extra=--batch", "--extra=--skip-column-names"})
+	cachePageSize, err := readDrupalCacheTableSize(runCtx, cli, containerName, ctx.EffectiveDrupalContainerRoot(), "cache_page")
 	if err != nil {
 		return "", err
 	}
-
-	size, err := parseFirstInt(output)
+	cacheRenderSize, err := readDrupalCacheTableSize(runCtx, cli, containerName, ctx.EffectiveDrupalContainerRoot(), "cache_render")
 	if err != nil {
 		return "", err
 	}
 
 	rows := []debugRow{
 		{Label: "Status", Value: renderStatus("ok")},
-		{Label: "cache_page", Value: humanBytes(size)},
+		{Label: "cache_page", Value: humanBytes(cachePageSize)},
+		{Label: "cache_render", Value: humanBytes(cacheRenderSize)},
 	}
-	if size >= cachePageWarningThreshold {
+	if cachePageSize >= cachePageWarningThreshold || cacheRenderSize >= cachePageWarningThreshold {
 		rows[0].Value = renderStatus("warning")
+	}
+	if cachePageSize >= cachePageWarningThreshold {
 		rows = append(rows, debugRow{Label: "Recommendation", Value: pageCacheExclusionURL})
 	}
 	return formatDebugRows(rows), nil
+}
+
+func readDrupalCacheTableSize(runCtx context.Context, cli *docker.DockerClient, containerName, containerRoot, tableName string) (int64, error) {
+	query := fmt.Sprintf("SELECT COALESCE(data_length + index_length, 0) FROM information_schema.TABLES WHERE table_schema = DATABASE() AND table_name = '%s';", strings.TrimSpace(tableName))
+	output, err := execDrupalCommandCapture(runCtx, cli, containerName, containerRoot, []string{"drush", "sql:query", query, "--extra=--batch", "--extra=--skip-column-names"})
+	if err != nil {
+		return 0, err
+	}
+	return parseFirstInt(output)
 }
 
 func getDrupalContainerForSDK(runCtx context.Context) (ctx *config.Context, cli *docker.DockerClient, containerName string, err error) {
@@ -302,8 +416,8 @@ func readCoreExtension(runCtx context.Context, files *plugin.FileAccessor, path 
 	}
 
 	var extension struct {
-		Module map[string]int `yaml:"module"`
-		Theme  map[string]int `yaml:"theme"`
+		Module map[string]any `yaml:"module"`
+		Theme  map[string]any `yaml:"theme"`
 	}
 	if err := yaml.Unmarshal(data, &extension); err != nil {
 		return nil, nil, err
@@ -322,6 +436,200 @@ func readCoreExtension(runCtx context.Context, files *plugin.FileAccessor, path 
 	sort.Strings(themes)
 
 	return modules, themes, nil
+}
+
+func readComposerLockModuleVersions(runCtx context.Context, files *plugin.FileAccessor, drupalRoot, projectDir string) (composerLockVersionInfo, error) {
+	path, err := findComposerLockPath(runCtx, files, drupalRoot, projectDir)
+	if err != nil {
+		return composerLockVersionInfo{}, err
+	}
+	if path == "" {
+		return composerLockVersionInfo{}, nil
+	}
+
+	data, err := files.ReadFileContext(runCtx, path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return composerLockVersionInfo{}, nil
+		}
+		return composerLockVersionInfo{}, err
+	}
+
+	var lock struct {
+		Packages    []composerLockPackage `json:"packages"`
+		PackagesDev []composerLockPackage `json:"packages-dev"`
+	}
+	if err := json.Unmarshal(data, &lock); err != nil {
+		return composerLockVersionInfo{}, err
+	}
+
+	info := composerLockVersionInfo{ModuleVersions: make(map[string]string)}
+	for _, pkg := range append(lock.Packages, lock.PackagesDev...) {
+		name, version := strings.TrimSpace(pkg.Name), strings.TrimSpace(pkg.Version)
+		if version == "" {
+			continue
+		}
+		switch name {
+		case "drupal/core", "drupal/drupal":
+			if info.CoreVersion == "" {
+				info.CoreVersion = version
+			}
+		}
+		if pkg.Type != "drupal-module" {
+			continue
+		}
+		moduleName := strings.TrimSpace(pkg.ModuleName())
+		if moduleName == "" {
+			continue
+		}
+		info.ModuleVersions[moduleName] = version
+	}
+	return info, nil
+}
+
+func readComposerPatches(runCtx context.Context, files *plugin.FileAccessor, drupalRoot, projectDir string) (string, error) {
+	path, err := findComposerFilePath(runCtx, files, drupalRoot, projectDir, "composer.json")
+	if err != nil {
+		return "", err
+	}
+	if path == "" {
+		return "", nil
+	}
+
+	data, err := files.ReadFileContext(runCtx, path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+
+	var composer struct {
+		Extra struct {
+			Patches json.RawMessage `json:"patches"`
+		} `json:"extra"`
+	}
+	if err := json.Unmarshal(data, &composer); err != nil {
+		return "", err
+	}
+	if len(composer.Extra.Patches) == 0 || string(composer.Extra.Patches) == "null" {
+		return "", nil
+	}
+
+	var pretty bytes.Buffer
+	if err := json.Indent(&pretty, composer.Extra.Patches, "", "  "); err != nil {
+		return "", err
+	}
+	return pretty.String(), nil
+}
+
+func findComposerLockPath(runCtx context.Context, files *plugin.FileAccessor, drupalRoot, projectDir string) (string, error) {
+	return findComposerFilePath(runCtx, files, drupalRoot, projectDir, "composer.lock")
+}
+
+func findComposerFilePath(runCtx context.Context, files *plugin.FileAccessor, drupalRoot, projectDir, fileName string) (string, error) {
+	candidates := []string{
+		filepath.Join(strings.TrimSpace(drupalRoot), fileName),
+	}
+	if projectDir != drupalRoot {
+		candidates = append(candidates, filepath.Join(strings.TrimSpace(projectDir), fileName))
+	}
+
+	for _, candidate := range candidates {
+		if strings.TrimSpace(candidate) == "" {
+			continue
+		}
+		if _, err := files.ReadFileContext(runCtx, candidate); err == nil {
+			return candidate, nil
+		} else if !os.IsNotExist(err) {
+			return "", err
+		}
+	}
+	return "", nil
+}
+
+type composerLockVersionInfo struct {
+	CoreVersion    string
+	ModuleVersions map[string]string
+}
+
+type composerLockPackage struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	Type    string `json:"type"`
+}
+
+func (p composerLockPackage) ModuleName() string {
+	name := strings.TrimSpace(p.Name)
+	if !strings.HasPrefix(name, "drupal/") {
+		return ""
+	}
+	return strings.TrimPrefix(name, "drupal/")
+}
+
+func renderModuleList(runCtx context.Context, files *plugin.FileAccessor, drupalRoot string, modules []string, versionInfo composerLockVersionInfo) ([]string, error) {
+	coreModules := make([]string, 0)
+	contribModules := make([]string, 0)
+	unknownModules := make([]string, 0)
+
+	for _, module := range modules {
+		module = strings.TrimSpace(module)
+		if module == "" {
+			continue
+		}
+		if isStaticCoreDrupalModule(module) {
+			if version := strings.TrimSpace(versionInfo.CoreVersion); version != "" {
+				coreModules = append(coreModules, fmt.Sprintf("%s@%s", module, version))
+			} else {
+				coreModules = append(coreModules, module)
+			}
+			continue
+		}
+		if version := strings.TrimSpace(versionInfo.ModuleVersions[module]); version != "" {
+			contribModules = append(contribModules, fmt.Sprintf("%s@%s", module, version))
+			continue
+		}
+		unknownModules = append(unknownModules, module)
+	}
+
+	sort.Strings(coreModules)
+	sort.Strings(contribModules)
+	sort.Strings(unknownModules)
+
+	sections := []struct {
+		Title  string
+		Values []string
+	}{
+		{Title: "Core modules:", Values: coreModules},
+		{Title: "Contrib modules:", Values: contribModules},
+		{Title: "Custom or submodules:", Values: unknownModules},
+	}
+
+	lines := make([]string, 0)
+	for idx, section := range sections {
+		lines = append(lines, "  "+section.Title)
+		lines = append(lines, formatListLines(section.Values, 3)...)
+		if idx < len(sections)-1 {
+			lines = append(lines, "")
+		}
+	}
+	return lines, nil
+}
+
+func isStaticCoreDrupalModule(module string) bool {
+	_, ok := drupalCoreModules[strings.TrimSpace(module)]
+	return ok
+}
+
+func indentLines(value, prefix string) string {
+	if strings.TrimSpace(value) == "" {
+		return strings.TrimSpace(prefix)
+	}
+	parts := strings.Split(value, "\n")
+	for i, part := range parts {
+		parts[i] = prefix + part
+	}
+	return strings.Join(parts, "\n")
 }
 
 func formatListLines(values []string, perLine int) []string {
