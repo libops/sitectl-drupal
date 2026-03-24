@@ -14,14 +14,15 @@ import (
 // login runs drush uli
 var loginCmd = &cobra.Command{
 	Use:   "uli",
-	Short: "Generate a one-time login link",
+	Short: "Generate a one-time login link and open it in your browser",
 	Long: `Generate a one-time login link and automatically open it in your default browser.
 
-This runs 'drush uli' in the Drupal container and opens the resulting URL.
+This runs drush uli inside the Drupal container, captures the resulting URL, and opens it.
+Unlike running drush uli directly, this command handles browser launching for you.
 
 Examples:
-  sitectl drush uli              # Login as admin (user 1)
-  sitectl drush uli --uid=2      # Login as user ID 2`,
+  sitectl isle uli           # Login as admin (user 1)
+  sitectl isle uli --uid=2   # Login as user ID 2`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx, cli, containerName, err := getDrupalContainerFromFlags(cmd)
 		if err != nil {

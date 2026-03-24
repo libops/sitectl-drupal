@@ -11,24 +11,19 @@ var drushCmd = &cobra.Command{
 	Use:                "drush [COMMAND]",
 	DisableFlagParsing: true,
 	Args:               cobra.ArbitraryArgs,
-	Short:              "Run drush commands on ISLE contexts",
-	Long: `Run drush commands on ISLE contexts.
+	Short:              "Run drush commands inside the Drupal container",
+	Long: `Run drush commands inside the Drupal container of the active context.
 
-This is a shorthand for "sitectl compose exec drupal drush" with automatic --uri handling.
-The DRUPAL_DRUSH_URI environment variable is automatically passed unless you specify --uri or -l.
-
-Special subcommands:
-  uli - Generate and auto-open a one-time login link in your browser
+This wraps "docker compose exec drupal drush" and automatically injects DRUPAL_DRUSH_URI
+so --uri does not need to be specified manually.
 
 Examples:
-  sitectl drush status                      # Check Drupal status
-  sitectl drush cr                          # Clear all caches
-  sitectl drush cex                         # Export configuration
-  sitectl drush cim                         # Import configuration
-  sitectl drush uli                         # Generate login link and open in browser
-  sitectl drush uli --uid=2                 # Login link for user ID 2
-  sitectl drush sqlq "SHOW TABLES"          # Run SQL query
-  sitectl drush --context prod status       # Check status on prod context`,
+  sitectl isle drush status                 # Check Drupal status
+  sitectl isle drush cr                     # Clear all caches
+  sitectl isle drush cex                    # Export configuration
+  sitectl isle drush cim                    # Import configuration
+  sitectl isle drush sqlq "SHOW TABLES"     # Run a SQL query
+  sitectl isle drush --context prod status  # Check status on the prod context`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		filteredArgs, ctx, cli, containerName, err := getDrupalContainer(cmd, args)
 		if err != nil {

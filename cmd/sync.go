@@ -24,12 +24,22 @@ var (
 var syncCmd = &cobra.Command{
 	Use:   "sync",
 	Short: "Sync Drupal artifacts between contexts",
+	Long: `Copy Drupal artifacts from one sitectl context to another.
+
+Available artifacts: database, config (Drupal config/sync directory)`,
 }
 
 var syncDatabaseCmd = &cobra.Command{
 	Use:     "database",
 	Aliases: []string{"db"},
 	Short:   "Sync the Drupal database from one context to another",
+	Long: `Copy the Drupal database from a source context to a target context.
+
+This backs up the database on the source, transfers the artifact, and imports it into the
+target. The command asks for confirmation before importing. Pass --yolo to skip the prompt
+in automation.
+
+Use --fresh to always take a new backup rather than reusing one from today.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		progress := plugin.NewProgressLine(cmd.ErrOrStderr(), "Syncing Drupal Database", "Resolving contexts")
 		defer progress.Close()
@@ -82,6 +92,10 @@ var syncDatabaseCmd = &cobra.Command{
 var syncConfigCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Sync the Drupal config/sync directory from one context to another",
+	Long: `Copy the Drupal configuration from a source context to a target context.
+
+This exports config as a tarball from the source, transfers it, and imports it on the target
+using drush cim.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		progress := plugin.NewProgressLine(cmd.ErrOrStderr(), "Syncing Drupal Config", "Resolving contexts")
 		defer progress.Close()
@@ -132,17 +146,17 @@ var syncConfigCmd = &cobra.Command{
 }
 
 func init() {
-	syncDatabaseCmd.Flags().StringVar(&syncSourceContext, "source", "", "Source sitectl context")
-	syncDatabaseCmd.Flags().StringVar(&syncTargetContext, "target", "", "Target sitectl context")
-	syncDatabaseCmd.Flags().BoolVar(&syncFresh, "fresh", false, "Always run a fresh source database backup instead of reusing today/yesterday if available")
-	syncDatabaseCmd.Flags().StringVar(&syncBackupDir, "backup-dir", "/tmp/sitectl-drupal-jobs/db-backup", "Source host directory used to cache database backup artifacts for sync")
-	syncDatabaseCmd.Flags().BoolVar(&syncYolo, "yolo", false, "Apply destructive database changes without confirmation")
+	syncDatabaseCmd.Flags().StringVar(&syncSourceContext, "source", "", "Source sitectl context.")
+	syncDatabaseCmd.Flags().StringVar(&syncTargetContext, "target", "", "Target sitectl context.")
+	syncDatabaseCmd.Flags().BoolVar(&syncFresh, "fresh", false, "Always take a fresh backup instead of reusing one from today.")
+	syncDatabaseCmd.Flags().StringVar(&syncBackupDir, "backup-dir", "/tmp/sitectl-drupal-jobs/db-backup", "Directory on the source host used to cache backup artifacts.")
+	syncDatabaseCmd.Flags().BoolVar(&syncYolo, "yolo", false, "Skip the confirmation prompt before importing.")
 	must(syncDatabaseCmd.MarkFlagRequired("source"))
 	must(syncDatabaseCmd.MarkFlagRequired("target"))
 
-	syncConfigCmd.Flags().StringVar(&syncSourceContext, "source", "", "Source sitectl context")
-	syncConfigCmd.Flags().StringVar(&syncTargetContext, "target", "", "Target sitectl context")
-	syncConfigCmd.Flags().StringVar(&syncDrupalRootfs, "drupal-rootfs", "", "Drupal rootfs relative to the target context project dir")
+	syncConfigCmd.Flags().StringVar(&syncSourceContext, "source", "", "Source sitectl context.")
+	syncConfigCmd.Flags().StringVar(&syncTargetContext, "target", "", "Target sitectl context.")
+	syncConfigCmd.Flags().StringVar(&syncDrupalRootfs, "drupal-rootfs", "", "Path to the Drupal web root on the target, relative to the project directory.")
 	must(syncConfigCmd.MarkFlagRequired("source"))
 	must(syncConfigCmd.MarkFlagRequired("target"))
 
