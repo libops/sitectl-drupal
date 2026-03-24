@@ -56,7 +56,7 @@ Examples:
 		}
 
 		output := strings.TrimSpace(stdout.String())
-		fmt.Println(output)
+		fmt.Fprintln(cmd.OutOrStdout(), output)
 
 		if strings.HasPrefix(output, "http") {
 			err := helpers.OpenURL(output)

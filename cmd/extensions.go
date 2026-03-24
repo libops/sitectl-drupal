@@ -12,12 +12,11 @@ import (
 	"strconv"
 	"strings"
 
-	"charm.land/lipgloss/v2"
 	"github.com/libops/sitectl/pkg/config"
 	"github.com/libops/sitectl/pkg/docker"
 	"github.com/libops/sitectl/pkg/plugin"
+	"github.com/libops/sitectl/pkg/plugin/debugui"
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 )
 
@@ -111,27 +110,6 @@ var drupalCoreModules = map[string]struct{}{
 	"workspaces":          {},
 }
 
-var (
-	debugPanelStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("#112235")).
-			Padding(1, 2)
-	debugTitleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("#98C1D9"))
-	debugSectionDividerStyle = lipgloss.NewStyle().
-					Foreground(lipgloss.Color("#29425E"))
-	debugStatusOKStyle = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(lipgloss.Color("#7BD389"))
-	debugStatusWarningStyle = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(lipgloss.Color("#F4C95D"))
-	debugMutedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#9FB3C8"))
-	debugRowStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("#112235"))
-)
-
 var componentExtensionCmd = &cobra.Command{
 	Use:    "__component",
 	Short:  "Internal component extension command",
@@ -221,11 +199,11 @@ func renderDrupalDebug(runCtx context.Context) (string, error) {
 	slog.Debug("resolved drupal root", "plugin", "drupal", "drupal_root", drupalRoot)
 	configDir := filepath.Join(drupalRoot, "config", "sync")
 	body := []string{
-		debugDivider(),
+		debugui.Divider(),
 		"",
-		debugTitleStyle.Render("General"),
+		debugui.Title("General"),
 		"",
-		formatDebugRows([]debugRow{
+		debugui.FormatRows([]debugui.Row{
 			{Label: "Context", Value: ctx.Name},
 			{Label: "Project dir", Value: ctx.ProjectDir},
 			{Label: "Drupal root", Value: drupalRoot},
@@ -236,7 +214,7 @@ func renderDrupalDebug(runCtx context.Context) (string, error) {
 	if strings.TrimSpace(drupalRoot) == "" {
 		slog.Debug("drupal root unavailable; skipping extension scan", "plugin", "drupal")
 		body = append(body, "", "Installed modules: unavailable")
-		return renderDebugPanel("drupal", strings.Join(body, "\n")), nil
+		return debugui.RenderPanel("drupal", strings.Join(body, "\n")), nil
 	}
 
 	slog.Debug("reading core.extension.yml", "plugin", "drupal", "path", filepath.Join(configDir, "core.extension.yml"))
@@ -256,12 +234,12 @@ func renderDrupalDebug(runCtx context.Context) (string, error) {
 	slog.Debug("rendering cache_page summary", "plugin", "drupal")
 	cachePageSummary, err := renderCachePageSummary(runCtx)
 	if err != nil {
-		body = append(body, "", debugDivider(), "", debugTitleStyle.Render("Cache Page"), "", formatDebugRows([]debugRow{
-			{Label: "Status", Value: renderStatus("warning")},
+		body = append(body, "", debugui.Divider(), "", debugui.Title("Cache Page"), "", debugui.FormatRows([]debugui.Row{
+			{Label: "Status", Value: debugui.Status("warning")},
 			{Label: "cache_page", Value: fmt.Sprintf("unavailable (%v)", err)},
 		}))
 	} else if strings.TrimSpace(cachePageSummary) != "" {
-		body = append(body, "", debugDivider(), "", debugTitleStyle.Render("Cache Page"), "", cachePageSummary)
+		body = append(body, "", debugui.Divider(), "", debugui.Title("Cache Page"), "", cachePageSummary)
 	}
 
 	moduleLines, err := renderModuleList(runCtx, files, drupalRoot, modules, moduleVersionInfo)
@@ -269,14 +247,14 @@ func renderDrupalDebug(runCtx context.Context) (string, error) {
 		return "", err
 	}
 
-	configLines := []string{debugDivider(), "", debugTitleStyle.Render("Installed Extensions"), "", fmt.Sprintf("Installed modules (%d):", len(modules))}
+	configLines := []string{debugui.Divider(), "", debugui.Title("Installed Extensions"), "", fmt.Sprintf("Installed modules (%d):", len(modules))}
 	configLines = append(configLines, moduleLines...)
 	configLines = append(configLines, "")
 	configLines = append(configLines, fmt.Sprintf("Installed themes (%d):", len(themes)))
 	configLines = append(configLines, formatListLines(themes, 3)...)
 	body = append(body, "", strings.Join(configLines, "\n"))
 
-	patchLines := []string{debugDivider(), "", debugTitleStyle.Render("Composer Patches"), ""}
+	patchLines := []string{debugui.Divider(), "", debugui.Title("Composer Patches"), ""}
 	if strings.TrimSpace(composerPatches) == "" {
 		patchLines = append(patchLines, "  none")
 	} else {
@@ -285,7 +263,7 @@ func renderDrupalDebug(runCtx context.Context) (string, error) {
 	body = append(body, "", strings.Join(patchLines, "\n"))
 
 	slog.Debug("finished plugin debug", "plugin", "drupal")
-	return renderDebugPanel("drupal", strings.Join(body, "\n")), nil
+	return debugui.RenderPanel("drupal", strings.Join(body, "\n")), nil
 }
 
 func renderCachePageSummary(runCtx context.Context) (string, error) {
@@ -304,23 +282,25 @@ func renderCachePageSummary(runCtx context.Context) (string, error) {
 		return "", err
 	}
 
-	rows := []debugRow{
-		{Label: "Status", Value: renderStatus("ok")},
+	rows := []debugui.Row{
+		{Label: "Status", Value: debugui.Status("ok")},
 		{Label: "cache_page", Value: humanBytes(cachePageSize)},
 		{Label: "cache_render", Value: humanBytes(cacheRenderSize)},
 	}
 	if cachePageSize >= cachePageWarningThreshold || cacheRenderSize >= cachePageWarningThreshold {
-		rows[0].Value = renderStatus("warning")
+		rows[0].Value = debugui.Status("warning")
 	}
 	if cachePageSize >= cachePageWarningThreshold {
-		rows = append(rows, debugRow{Label: "Recommendation", Value: pageCacheExclusionURL})
+		rows = append(rows, debugui.Row{Label: "Recommendation", Value: pageCacheExclusionURL})
 	}
-	return formatDebugRows(rows), nil
+	return debugui.FormatRows(rows), nil
 }
 
 func readDrupalCacheTableSize(runCtx context.Context, cli *docker.DockerClient, containerName, containerRoot, tableName string) (int64, error) {
 	query := fmt.Sprintf("SELECT COALESCE(data_length + index_length, 0) FROM information_schema.TABLES WHERE table_schema = DATABASE() AND table_name = '%s';", strings.TrimSpace(tableName))
-	output, err := execDrupalCommandCapture(runCtx, cli, containerName, containerRoot, []string{"drush", "sql:query", query, "--extra=--batch", "--extra=--skip-column-names"})
+	cmd := []string{"drush", "sql:query", query, "--extra=--batch", "--extra=--skip-column-names"}
+	slog.Debug(strings.Join(cmd, " "), "plugin", "drupal", "container", containerName)
+	output, err := docker.ExecCapture(runCtx, cli, containerName, containerRoot, cmd)
 	if err != nil {
 		return 0, err
 	}
@@ -349,37 +329,6 @@ func getDrupalContainerForSDK(runCtx context.Context) (ctx *config.Context, cli 
 	}
 
 	return ctx, cli, containerName, nil
-}
-
-func execDrupalCommandCapture(runCtx context.Context, cli *docker.DockerClient, containerName, containerRoot string, cmd []string) (string, error) {
-	slog.Debug(strings.Join(cmd, " "), "plugin", "drupal", "container", containerName)
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-
-	exitCode, err := cli.Exec(runCtx, docker.ExecOptions{
-		Container:    containerName,
-		Cmd:          cmd,
-		WorkingDir:   containerRoot,
-		AttachStdout: true,
-		AttachStderr: true,
-		Stdout:       &stdout,
-		Stderr:       &stderr,
-	})
-	if err != nil {
-		return "", err
-	}
-	if exitCode != 0 {
-		detail := strings.TrimSpace(stderr.String())
-		if detail == "" {
-			detail = strings.TrimSpace(stdout.String())
-		}
-		if detail != "" {
-			return "", fmt.Errorf("drupal command failed with exit code %d: %s", exitCode, detail)
-		}
-		return "", fmt.Errorf("drupal command failed with exit code %d", exitCode)
-	}
-
-	return strings.TrimSpace(stdout.String()), nil
 }
 
 func parseFirstInt(output string) (int64, error) {
@@ -649,88 +598,4 @@ func formatListLines(values []string, perLine int) []string {
 		lines = append(lines, "  "+strings.Join(values[i:end], ", "))
 	}
 	return lines
-}
-
-type debugRow struct {
-	Label string
-	Value string
-}
-
-func renderDebugPanel(title, body string) string {
-	header := debugTitleStyle.Render(strings.TrimSpace(title))
-	content := header
-	if strings.TrimSpace(body) != "" {
-		content += "\n\n" + body
-	}
-	return debugPanelStyle.Width(debugPanelWidth()).Render(content)
-}
-
-func formatDebugRows(rows []debugRow) string {
-	labelWidth := 0
-	for _, row := range rows {
-		if width := len(strings.TrimSpace(row.Label)); width > labelWidth {
-			labelWidth = width
-		}
-	}
-	lines := make([]string, 0, len(rows))
-	rowWidth := debugContentWidth()
-	for _, row := range rows {
-		label := strings.TrimSpace(row.Label)
-		value := strings.TrimSpace(row.Value)
-		if label == "" {
-			lines = append(lines, renderDebugRow(rowWidth, "", value))
-			continue
-		}
-		lines = append(lines, renderDebugRow(rowWidth, fmt.Sprintf("%-*s", labelWidth, label), value))
-	}
-	return strings.Join(lines, "\n")
-}
-
-func renderStatus(state string) string {
-	switch strings.ToLower(strings.TrimSpace(state)) {
-	case "ok":
-		return debugStatusOKStyle.Render("OK")
-	case "warning":
-		return debugStatusWarningStyle.Render("WARNING")
-	default:
-		return debugMutedStyle.Render(strings.ToUpper(strings.TrimSpace(state)))
-	}
-}
-
-func renderDebugRow(width int, label, value string) string {
-	valueWidth := max(0, width-lipgloss.Width(label)-2)
-	row := label
-	if strings.TrimSpace(label) != "" {
-		row += "  "
-	}
-	row += lipgloss.NewStyle().
-		Width(valueWidth).
-		Background(lipgloss.Color("#112235")).
-		Render(value)
-	return debugRowStyle.Width(width).Render(row)
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func debugPanelWidth() int {
-	if columns, err := strconv.Atoi(strings.TrimSpace(os.Getenv("COLUMNS"))); err == nil && columns > 0 {
-		return max(40, columns)
-	}
-	if width, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil && width > 0 {
-		return max(40, width)
-	}
-	return 100
-}
-
-func debugContentWidth() int {
-	return max(20, debugPanelWidth()-4)
-}
-
-func debugDivider() string {
-	return debugSectionDividerStyle.Width(debugContentWidth()).Render(strings.Repeat("─", debugContentWidth()))
 }
