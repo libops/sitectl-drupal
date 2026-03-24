@@ -18,8 +18,9 @@ func init() {
 func RegisterCommands(s *plugin.SDK) {
 	sdk = s
 	pluginjobs.Register(s)
-	sdk.AddCommand(sdk.GetMetadataCommand())
+	sdk.AddCommand(sdk.GetDiscoveryMetadataCommand())
 	sdk.AddCommand(componentExtensionCmd)
+	sdk.RegisterCreateRunner(createDefinition(), createRunner{})
 	sdk.AddCommand(debugExtensionCmd)
 	sdk.AddCommand(drushCmd)
 	sdk.AddCommand(loginCmd)
