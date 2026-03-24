@@ -11,7 +11,7 @@ var (
 )
 
 func init() {
-	loginCmd.Flags().Uint("uid", 1, "Drupal user ID to provide a direct login link for")
+	loginCmd.Flags().Uint("uid", 1, "Drupal user ID to generate the login link for.")
 }
 
 // RegisterCommands registers all drupal commands with the plugin SDK

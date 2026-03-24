@@ -142,14 +142,12 @@ func RunDBBackup(cmd *cobra.Command, ctx *config.Context, outputPath string) err
 }
 
 func RunDBImport(cmd *cobra.Command, ctx *config.Context, inputPath string, yolo bool) error {
-	if !yolo {
-		ok, err := confirmDatabaseReplacement(ctx.Name, "Drupal", inputPath)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return fmt.Errorf("database import cancelled")
-		}
+	ok, err := corejob.ConfirmDatabaseReplacement(ctx.Name, "Drupal", inputPath, yolo)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("database import cancelled")
 	}
 
 	_, cli, containerName, err := getDrupalContainerForContext(cmd.Context(), ctx)
@@ -199,7 +197,7 @@ func RunDBImport(cmd *cobra.Command, ctx *config.Context, inputPath string, yolo
 	if exitCode != 0 {
 		return fmt.Errorf("drupal sql import failed with exit code %d: %s", exitCode, strings.TrimSpace(stderr.String()))
 	}
-	_, err = execDrupalCommandCapture(cmd.Context(), cli, containerName, ctx.EffectiveDrupalContainerRoot(), []string{"drush", "cr", "-y"})
+	_, err = docker.ExecCapture(cmd.Context(), cli, containerName, ctx.EffectiveDrupalContainerRoot(), []string{"drush", "cr", "-y"})
 	return err
 }
 
@@ -214,7 +212,7 @@ func RunConfigExport(cmd *cobra.Command, ctx *config.Context, outputPath string)
 	defer cli.Close()
 
 	containerRoot := ctx.EffectiveDrupalContainerRoot()
-	if _, err := execDrupalCommandCapture(cmd.Context(), cli, containerName, containerRoot, []string{"drush", "cex", "-y"}); err != nil {
+	if _, err := docker.ExecCapture(cmd.Context(), cli, containerName, containerRoot, []string{"drush", "cex", "-y"}); err != nil {
 		return err
 	}
 
@@ -300,10 +298,10 @@ func RunConfigImport(cmd *cobra.Command, ctx *config.Context, inputPath, drupalR
 	}
 
 	containerRoot := ctx.EffectiveDrupalContainerRoot()
-	if _, err := execDrupalCommandCapture(cmd.Context(), cli, containerName, containerRoot, []string{"drush", "cim", "-y"}); err != nil {
+	if _, err := docker.ExecCapture(cmd.Context(), cli, containerName, containerRoot, []string{"drush", "cim", "-y"}); err != nil {
 		return err
 	}
-	_, err = execDrupalCommandCapture(cmd.Context(), cli, containerName, containerRoot, []string{"drush", "cr", "-y"})
+	_, err = docker.ExecCapture(cmd.Context(), cli, containerName, containerRoot, []string{"drush", "cr", "-y"})
 	return err
 }
 
@@ -326,61 +324,12 @@ func getDrupalContainerForContext(runCtx context.Context, ctx *config.Context) (
 	return ctx, cli, containerName, nil
 }
 
-func execDrupalCommandCapture(runCtx context.Context, cli *docker.DockerClient, containerName, containerRoot string, command []string) (string, error) {
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-
-	exitCode, err := cli.Exec(runCtx, docker.ExecOptions{
-		Container:    containerName,
-		Cmd:          command,
-		WorkingDir:   containerRoot,
-		AttachStdout: true,
-		AttachStderr: true,
-		Stdout:       &stdout,
-		Stderr:       &stderr,
-	})
-	if err != nil {
-		return "", err
-	}
-	if exitCode != 0 {
-		detail := strings.TrimSpace(stderr.String())
-		if detail == "" {
-			detail = strings.TrimSpace(stdout.String())
-		}
-		if detail != "" {
-			return "", fmt.Errorf("drupal command failed with exit code %d: %s", exitCode, detail)
-		}
-		return "", fmt.Errorf("drupal command failed with exit code %d", exitCode)
-	}
-	return strings.TrimSpace(stdout.String()), nil
-}
-
 func resolveContextDrupalConfigDir(ctx *config.Context, drupalRootfs string) (string, error) {
 	rootfs := strings.TrimSpace(drupalRootfs)
 	if rootfs == "" {
 		rootfs = ctx.EffectiveDrupalRootfs()
 	}
 	return ctx.ResolveProjectPath(filepath.Join(rootfs, "config", "sync")), nil
-}
-
-func confirmDatabaseReplacement(targetContext, databaseName, inputPath string) (bool, error) {
-	prompt := []string{
-		fmt.Sprintf("About to import %s database artifact %q into context %q.", databaseName, inputPath, targetContext),
-		"This will wipe out the target database.",
-		"Continue? [y/N]: ",
-	}
-
-	input, err := config.GetInput(prompt...)
-	if err != nil {
-		return false, err
-	}
-
-	switch strings.ToLower(strings.TrimSpace(input)) {
-	case "y", "yes":
-		return true, nil
-	default:
-		return false, nil
-	}
 }
 
 func uploadDirectory(files *config.FileAccessor, sourceDir, destinationDir string) error {
