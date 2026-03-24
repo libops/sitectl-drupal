@@ -196,9 +196,9 @@ func TestRenderDrupalDebugRequiresSDK(t *testing.T) {
 	sdk = nil
 	defer func() { sdk = original }()
 
-	_, err := renderDrupalDebug(context.Background())
+	_, err := renderDrupalDebugBody(context.Background(), &config.Context{}, "")
 	if err == nil {
-		t.Fatal("expected renderDrupalDebug() error")
+		t.Fatal("expected renderDrupalDebugBody() error")
 	}
 	if !strings.Contains(err.Error(), "plugin sdk is not initialized") {
 		t.Fatalf("unexpected error: %v", err)
