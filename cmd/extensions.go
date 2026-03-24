@@ -21,7 +21,6 @@ import (
 )
 
 var drupalComponentName string
-var drupalRootfsPath string
 
 const (
 	cachePageWarningThreshold = int64(1 << 30)
@@ -148,18 +147,17 @@ var componentExtensionSetCmd = &cobra.Command{
 	},
 }
 
-var debugExtensionCmd = &cobra.Command{
-	Use:    "__debug",
-	Short:  "Internal debug extension command",
-	Hidden: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		rendered, err := renderDrupalDebug(cmd.Context())
-		if err != nil {
-			return err
-		}
-		_, err = fmt.Fprintln(cmd.OutOrStdout(), rendered)
-		return err
-	},
+// drupalDebugRunner implements plugin.DebugRunner for the drupal plugin.
+type drupalDebugRunner struct {
+	rootfsPath string
+}
+
+func (r *drupalDebugRunner) BindFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&r.rootfsPath, "drupal-rootfs", "", "Drupal rootfs path override")
+}
+
+func (r *drupalDebugRunner) Render(cmd *cobra.Command, ctx *config.Context) (string, error) {
+	return renderDrupalDebugBody(cmd.Context(), ctx, r.rootfsPath)
 }
 
 func init() {
@@ -169,18 +167,12 @@ func init() {
 	componentExtensionCmd.AddCommand(componentExtensionDescribeCmd)
 	componentExtensionCmd.AddCommand(componentExtensionReconcileCmd)
 	componentExtensionCmd.AddCommand(componentExtensionSetCmd)
-
-	debugExtensionCmd.Flags().StringVar(&drupalRootfsPath, "drupal-rootfs", "", "Drupal rootfs path override")
 }
 
-func renderDrupalDebug(runCtx context.Context) (string, error) {
+func renderDrupalDebugBody(runCtx context.Context, ctx *config.Context, rootfsOverride string) (string, error) {
 	slog.Debug("starting plugin debug", "plugin", "drupal")
 	if sdk == nil {
 		return "", fmt.Errorf("plugin sdk is not initialized")
-	}
-	ctx, err := sdk.GetContext()
-	if err != nil {
-		return "", err
 	}
 	slog.Debug("resolved plugin context", "plugin", "drupal", "context", ctx.Name, "project_dir", ctx.ProjectDir)
 	slog.Debug("creating file accessor", "plugin", "drupal")
@@ -190,7 +182,7 @@ func renderDrupalDebug(runCtx context.Context) (string, error) {
 	}
 	defer files.Close()
 
-	rootfs := strings.TrimSpace(drupalRootfsPath)
+	rootfs := strings.TrimSpace(rootfsOverride)
 	if rootfs == "" {
 		rootfs = ctx.EffectiveDrupalRootfs()
 	}
@@ -262,8 +254,8 @@ func renderDrupalDebug(runCtx context.Context) (string, error) {
 	}
 	body = append(body, "", strings.Join(patchLines, "\n"))
 
-	slog.Debug("finished plugin debug", "plugin", "drupal")
-	return debugui.RenderPanel("drupal", strings.Join(body, "\n")), nil
+	slog.Debug("finished plugin debug body", "plugin", "drupal")
+	return strings.Join(body, "\n"), nil
 }
 
 func renderCachePageSummary(runCtx context.Context) (string, error) {

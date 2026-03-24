@@ -21,7 +21,7 @@ func RegisterCommands(s *plugin.SDK) {
 	sdk.AddCommand(sdk.GetDiscoveryMetadataCommand())
 	sdk.AddCommand(componentExtensionCmd)
 	sdk.RegisterCreateRunner(createDefinition(), createRunner{})
-	sdk.AddCommand(debugExtensionCmd)
+	sdk.RegisterDebugHandler(&drupalDebugRunner{})
 	sdk.AddCommand(drushCmd)
 	sdk.AddCommand(loginCmd)
 	sdk.AddCommand(syncCmd)

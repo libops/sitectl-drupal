@@ -1,4 +1,4 @@
-.PHONY: build deps lint test work install docs-snippets
+.PHONY: build deps lint test work install
 
 BINARY_NAME=sitectl-drupal
 INSTALL_DIR ?= $(or $(dir $(shell which $(BINARY_NAME) 2>/dev/null)),/usr/local/bin/)
@@ -29,5 +29,3 @@ test: build
 work:
 	./scripts/use-go-work.sh
 
-docs-snippets: work
-	go run ./scripts/gen-docs-snippets/
