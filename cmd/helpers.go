@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/libops/sitectl/pkg/config"
 	"github.com/libops/sitectl/pkg/docker"
 	"github.com/libops/sitectl/pkg/helpers"
@@ -35,7 +37,9 @@ func getDrupalContainer(cmd *cobra.Command, args []string) (filteredArgs []strin
 	// Get the Drupal container name
 	containerName, err = cli.GetContainerNameContext(cmd.Context(), ctx, *drupalServiceName)
 	if err != nil {
-		cli.Close()
+		if closeErr := cli.Close(); closeErr != nil {
+			err = fmt.Errorf("%w; close docker client: %v", err, closeErr)
+		}
 		return nil, nil, nil, "", err
 	}
 
@@ -70,7 +74,9 @@ func getDrupalContainerFromFlags(cmd *cobra.Command) (ctx *config.Context, cli *
 	// Get the Drupal container name
 	containerName, err = cli.GetContainerNameContext(cmd.Context(), ctx, *drupalServiceName)
 	if err != nil {
-		cli.Close()
+		if closeErr := cli.Close(); closeErr != nil {
+			err = fmt.Errorf("%w; close docker client: %v", err, closeErr)
+		}
 		return nil, nil, "", err
 	}
 

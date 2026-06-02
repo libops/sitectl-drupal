@@ -19,3 +19,16 @@ Instead of homebrew, you can download a binary for your system from [the latest 
 
 Then put the binary in a directory that is in your `$PATH`
 
+## Commands
+
+- `sitectl drupal build`
+- `sitectl drupal init`
+- `sitectl drupal up`
+- `sitectl drupal down`
+- `sitectl drupal status`
+- `sitectl drupal logs [SERVICE...]`
+- `sitectl drupal rollout`
+- `sitectl drupal drush [COMMAND...]`
+- `sitectl drupal uli`
+- `sitectl drupal sync database`
+- `sitectl drupal sync config`

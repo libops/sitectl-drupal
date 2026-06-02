@@ -23,6 +23,8 @@ var (
 	drupalService = "drupal"
 )
 
+const maxConfigArchiveBytes = 64 << 20
+
 func Register(s *plugin.SDK) {
 	sdk = s
 	sdk.RegisterContextJob(corejob.Spec{Name: "db-backup", Description: "Export a Drupal database backup artifact"}, &dbBackupJob{})
@@ -161,13 +163,15 @@ func RunDBImport(cmd *cobra.Command, ctx *config.Context, inputPath string, yolo
 		return err
 	}
 	tempPath := tempFile.Name()
-	tempFile.Close()
+	if err := tempFile.Close(); err != nil {
+		return err
+	}
 	defer os.Remove(tempPath)
 
 	if err := corejob.DownloadContextFile(ctx, inputPath, tempPath); err != nil {
 		return err
 	}
-	inputFile, err := os.Open(tempPath)
+	inputFile, err := os.Open(tempPath) // #nosec G304 -- tempPath is created by this process and populated before import.
 	if err != nil {
 		return err
 	}
@@ -265,7 +269,9 @@ func RunConfigImport(cmd *cobra.Command, ctx *config.Context, inputPath, drupalR
 		return err
 	}
 	tempPath := tempFile.Name()
-	tempFile.Close()
+	if err := tempFile.Close(); err != nil {
+		return err
+	}
 	defer os.Remove(tempPath)
 
 	if err := corejob.DownloadContextFile(ctx, inputPath, tempPath); err != nil {
@@ -313,11 +319,11 @@ func getDrupalContainerForContext(runCtx context.Context, ctx *config.Context) (
 
 	containerName, err := cli.GetContainerNameContext(runCtx, ctx, drupalService)
 	if err != nil {
-		cli.Close()
+		_ = cli.Close()
 		return nil, nil, "", err
 	}
 	if strings.TrimSpace(containerName) == "" {
-		cli.Close()
+		_ = cli.Close()
 		return nil, nil, "", fmt.Errorf("unable to find drupal service %q for context %q", drupalService, ctx.Name)
 	}
 
@@ -349,7 +355,14 @@ func uploadDirectory(files *config.FileAccessor, sourceDir, destinationDir strin
 }
 
 func extractTarGz(archivePath, destination string) error {
-	file, err := os.Open(archivePath)
+	destination = filepath.Clean(destination)
+	root, err := os.OpenRoot(destination)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+
+	file, err := os.Open(archivePath) // #nosec G304 -- archivePath is a temporary file created by this process before extracting under destination.
 	if err != nil {
 		return err
 	}
@@ -371,22 +384,28 @@ func extractTarGz(archivePath, destination string) error {
 			return err
 		}
 
-		targetPath := filepath.Join(destination, filepath.Clean(header.Name))
+		relPath, err := cleanTarRelPath(header.Name)
+		if err != nil {
+			return err
+		}
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(targetPath, 0o755); err != nil {
+			if err := root.MkdirAll(relPath, 0o700); err != nil {
 				return err
 			}
 		case tar.TypeReg:
-			if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+			if header.Size < 0 || header.Size > maxConfigArchiveBytes {
+				return fmt.Errorf("tar entry %q exceeds maximum allowed size", header.Name)
+			}
+			if err := root.MkdirAll(filepath.Dir(relPath), 0o700); err != nil {
 				return err
 			}
-			out, err := os.Create(targetPath)
+			out, err := root.OpenFile(relPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 			if err != nil {
 				return err
 			}
-			if _, err := io.Copy(out, tarReader); err != nil {
-				out.Close()
+			if _, err := io.CopyN(out, tarReader, header.Size); err != nil {
+				_ = out.Close()
 				return err
 			}
 			if err := out.Close(); err != nil {
@@ -396,4 +415,16 @@ func extractTarGz(archivePath, destination string) error {
 			return fmt.Errorf("unsupported tar entry type %q", string(header.Typeflag))
 		}
 	}
+}
+
+func cleanTarRelPath(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", fmt.Errorf("empty tar entry name")
+	}
+	cleaned := filepath.Clean(name)
+	if filepath.IsAbs(cleaned) || cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("unsafe tar entry path %q", name)
+	}
+	return cleaned, nil
 }

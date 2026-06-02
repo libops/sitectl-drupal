@@ -17,10 +17,22 @@ func init() {
 // RegisterCommands registers all drupal commands with the plugin SDK
 func RegisterCommands(s *plugin.SDK) {
 	sdk = s
+	sdk.SetComposeProjectDiscovery(plugin.ComposeProjectDiscovery{
+		RequiredServices:          []string{"drupal"},
+		ForbiddenComposerPackages: []string{"drupal/islandora"},
+		Reason:                    "drupal service without drupal/islandora in composer.json",
+	})
 	pluginjobs.Register(s)
 	sdk.AddCommand(sdk.GetDiscoveryMetadataCommand())
 	sdk.AddCommand(componentExtensionCmd)
-	sdk.RegisterCreateRunner(createDefinition(), createRunner{})
+	sdk.RegisterStandardComposeTemplate(createDefinition(), plugin.StandardComposeTemplateOptions{
+		DefaultPath:         "./drupal",
+		DefaultPlugin:       "drupal",
+		DefaultDrupalRootfs: drupalCreateDrupalRoot,
+		DrupalContainerRoot: drupalContainerRoot,
+		ReadyMessage:        "Drupal is ready for use through sitectl.",
+		DisplayName:         "Drupal",
+	})
 	sdk.RegisterDebugHandler(&drupalDebugRunner{})
 	sdk.AddCommand(drushCmd)
 	sdk.AddCommand(loginCmd)

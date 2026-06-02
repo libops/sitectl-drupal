@@ -316,7 +316,9 @@ func getDrupalContainerForSDK(runCtx context.Context) (ctx *config.Context, cli 
 
 	containerName, err = cli.GetContainerNameContext(runCtx, ctx, *drupalServiceName)
 	if err != nil {
-		cli.Close()
+		if closeErr := cli.Close(); closeErr != nil {
+			err = fmt.Errorf("%w; close docker client: %v", err, closeErr)
+		}
 		return nil, nil, "", err
 	}
 

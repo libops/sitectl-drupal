@@ -1,7 +1,6 @@
 .PHONY: build deps lint test work install
 
 BINARY_NAME=sitectl-drupal
-INSTALL_DIR ?= $(or $(dir $(shell which $(BINARY_NAME) 2>/dev/null)),/usr/local/bin/)
 
 deps: work
 	go mod tidy
@@ -9,8 +8,8 @@ deps: work
 build:
 	go build -o $(BINARY_NAME) .
 
-install: work build
-	sudo cp $(BINARY_NAME) $(INSTALL_DIR)$(BINARY_NAME)
+install: build
+	mv $(BINARY_NAME) /usr/local/bin
 
 lint:
 	go fmt ./...
@@ -28,4 +27,3 @@ test: build
 
 work:
 	./scripts/use-go-work.sh
-
