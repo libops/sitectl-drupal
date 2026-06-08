@@ -10,6 +10,7 @@ import (
 
 	"github.com/libops/sitectl/pkg/config"
 	"github.com/libops/sitectl/pkg/plugin"
+	"github.com/spf13/cobra"
 )
 
 func TestReadCoreExtensionParsesModulesAndThemes(t *testing.T) {
@@ -48,6 +49,20 @@ theme:
 	wantThemes := []string{"claro", "olivero"}
 	if !reflect.DeepEqual(themes, wantThemes) {
 		t.Fatalf("themes = %v, want %v", themes, wantThemes)
+	}
+}
+
+func TestDrupalDebugRunnerDeclaresRPCFlags(t *testing.T) {
+	cmd := &cobra.Command{Use: "debug"}
+	runner := &drupalDebugRunner{}
+
+	runner.BindFlags(cmd)
+
+	if cmd.Flags().Lookup("verbose") == nil {
+		t.Fatal("expected debug flag \"verbose\" to be declared")
+	}
+	if cmd.Flags().Lookup("drupal-rootfs") != nil {
+		t.Fatal("did not expect removed debug flag \"drupal-rootfs\" to be declared")
 	}
 }
 
@@ -196,12 +211,32 @@ func TestRenderDrupalDebugRequiresSDK(t *testing.T) {
 	sdk = nil
 	defer func() { sdk = original }()
 
-	_, err := renderDrupalDebugBody(context.Background(), &config.Context{}, "")
+	_, err := renderDrupalDebugBody(context.Background(), &config.Context{}, false)
 	if err == nil {
 		t.Fatal("expected renderDrupalDebugBody() error")
 	}
 	if !strings.Contains(err.Error(), "plugin sdk is not initialized") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRenderDrupalVerboseDebug(t *testing.T) {
+	got := renderDrupalVerboseDebug("context", "web", 3, 2, 1, true)
+
+	for _, want := range []string{
+		"Debug Details",
+		"Rootfs source",
+		"context",
+		"Effective rootfs",
+		"web",
+		"Module count",
+		"3",
+		"Composer patches",
+		"true",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("renderDrupalVerboseDebug() missing %q in:\n%s", want, got)
+		}
 	}
 }
 
