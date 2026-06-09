@@ -1,0 +1,47 @@
+name: integration-test
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-test-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  create-drupal:
+    name: sitectl create drupal ${{ matrix.create_definition }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - create_definition: default
+            create_args: ""
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-version: ">=1.26.1"
+
+      - name: Install sitectl
+        run: |
+          curl -fsSL https://packages.libops.io/sitectl/sitectl-archive-keyring.asc | sudo gpg --dearmor -o /usr/share/keyrings/sitectl-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/sitectl-archive-keyring.gpg] https://packages.libops.io/sitectl ./" | sudo tee /etc/apt/sources.list.d/sitectl.list >/dev/null
+          sudo apt-get update
+          sudo apt-get install -y sitectl
+
+      - name: setup git identity
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+
+      - name: Run create integration test
+        run: make integration-test CREATE_DEFINITION=${{ matrix.create_definition }} CREATE_ARGS="${{ matrix.create_args }}"
+        env:
+          TERM: xterm-256color

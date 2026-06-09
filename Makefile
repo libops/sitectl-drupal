@@ -1,6 +1,9 @@
-.PHONY: build deps lint test work install
+.PHONY: build deps lint test work install integration-test
 
 BINARY_NAME=sitectl-drupal
+CREATE_DEFINITION?=default
+CREATE_ARGS?=
+SITECTL_CONTEXT?=integration-test
 
 deps: work
 	go mod tidy
@@ -27,3 +30,6 @@ test: build
 
 work:
 	./scripts/use-go-work.sh
+
+integration-test:
+	SITECTL_CONTEXT="$(SITECTL_CONTEXT)" CREATE_DEFINITION="$(CREATE_DEFINITION)" CREATE_ARGS="$(CREATE_ARGS)" ./scripts/test-create.sh

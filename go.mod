@@ -3,7 +3,7 @@ module github.com/libops/sitectl-drupal
 go 1.26.1
 
 require (
-	github.com/libops/sitectl v0.19.0
+	github.com/libops/sitectl v0.19.2
 	github.com/spf13/cobra v1.10.2
 	gopkg.in/yaml.v3 v3.0.1
 )
