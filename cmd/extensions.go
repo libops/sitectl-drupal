@@ -20,8 +20,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var drupalComponentName string
-
 const (
 	cachePageWarningThreshold = int64(1 << 30)
 	pageCacheExclusionURL     = "https://www.drupal.org/project/page_cache_exclusion"
@@ -109,67 +107,20 @@ var drupalCoreModules = map[string]struct{}{
 	"workspaces":          {},
 }
 
-var componentExtensionCmd = &cobra.Command{
-	Use:    "__component",
-	Short:  "Internal component extension command",
-	Hidden: true,
-}
-
-var componentExtensionDescribeCmd = &cobra.Command{
-	Use:   "describe",
-	Short: "Internal component describe hook",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if strings.TrimSpace(drupalComponentName) != "" {
-			return fmt.Errorf("unknown drupal component %q", drupalComponentName)
-		}
-		_, err := fmt.Fprintln(cmd.OutOrStdout(), "== drupal components ==\nNo Drupal-specific components are registered yet.")
-		return err
-	},
-}
-
-var componentExtensionReconcileCmd = &cobra.Command{
-	Use:   "reconcile",
-	Short: "Internal component reconcile hook",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if strings.TrimSpace(drupalComponentName) != "" {
-			return fmt.Errorf("unknown drupal component %q", drupalComponentName)
-		}
-		return nil
-	},
-}
-
-var componentExtensionSetCmd = &cobra.Command{
-	Use:   "set <name> [disposition]",
-	Short: "Internal component set hook",
-	Args:  cobra.RangeArgs(1, 2),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return fmt.Errorf("unknown drupal component %q", args[0])
-	},
-}
-
 // drupalDebugRunner implements plugin.DebugRunner for the drupal plugin.
 type drupalDebugRunner struct {
-	rootfsPath string
+	verbose bool
 }
 
 func (r *drupalDebugRunner) BindFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&r.rootfsPath, "drupal-rootfs", "", "Drupal rootfs path override")
+	cmd.Flags().BoolVar(&r.verbose, "verbose", false, "Include verbose debug details")
 }
 
 func (r *drupalDebugRunner) Render(cmd *cobra.Command, ctx *config.Context) (string, error) {
-	return renderDrupalDebugBody(cmd.Context(), ctx, r.rootfsPath)
+	return renderDrupalDebugBody(cmd.Context(), ctx, r.verbose)
 }
 
-func init() {
-	componentExtensionDescribeCmd.Flags().StringVarP(&drupalComponentName, "component", "c", "", "Specific Drupal component to describe")
-	componentExtensionReconcileCmd.Flags().StringVarP(&drupalComponentName, "component", "c", "", "Specific Drupal component to reconcile")
-
-	componentExtensionCmd.AddCommand(componentExtensionDescribeCmd)
-	componentExtensionCmd.AddCommand(componentExtensionReconcileCmd)
-	componentExtensionCmd.AddCommand(componentExtensionSetCmd)
-}
-
-func renderDrupalDebugBody(runCtx context.Context, ctx *config.Context, rootfsOverride string) (string, error) {
+func renderDrupalDebugBody(runCtx context.Context, ctx *config.Context, verbose bool) (string, error) {
 	slog.Debug("starting plugin debug", "plugin", "drupal")
 	if sdk == nil {
 		return "", fmt.Errorf("plugin sdk is not initialized")
@@ -182,10 +133,7 @@ func renderDrupalDebugBody(runCtx context.Context, ctx *config.Context, rootfsOv
 	}
 	defer files.Close()
 
-	rootfs := strings.TrimSpace(rootfsOverride)
-	if rootfs == "" {
-		rootfs = ctx.EffectiveDrupalRootfs()
-	}
+	rootfs := ctx.EffectiveDrupalRootfs()
 	slog.Debug("resolving drupal root", "plugin", "drupal", "rootfs", rootfs)
 	drupalRoot := ctx.ResolveProjectPath(rootfs)
 	slog.Debug("resolved drupal root", "plugin", "drupal", "drupal_root", drupalRoot)
@@ -246,6 +194,10 @@ func renderDrupalDebugBody(runCtx context.Context, ctx *config.Context, rootfsOv
 	configLines = append(configLines, formatListLines(themes, 3)...)
 	body = append(body, "", strings.Join(configLines, "\n"))
 
+	if verbose {
+		body = append(body, "", renderDrupalVerboseDebug("context", rootfs, len(modules), len(themes), len(moduleVersionInfo.ModuleVersions), strings.TrimSpace(composerPatches) != ""))
+	}
+
 	patchLines := []string{debugui.Divider(), "", debugui.Title("Composer Patches"), ""}
 	if strings.TrimSpace(composerPatches) == "" {
 		patchLines = append(patchLines, "  none")
@@ -256,6 +208,23 @@ func renderDrupalDebugBody(runCtx context.Context, ctx *config.Context, rootfsOv
 
 	slog.Debug("finished plugin debug body", "plugin", "drupal")
 	return strings.Join(body, "\n"), nil
+}
+
+func renderDrupalVerboseDebug(rootfsSource, effectiveRootfs string, moduleCount, themeCount, versionedContribCount int, hasComposerPatches bool) string {
+	return strings.Join([]string{
+		debugui.Divider(),
+		"",
+		debugui.Title("Debug Details"),
+		"",
+		debugui.FormatRows([]debugui.Row{
+			{Label: "Rootfs source", Value: rootfsSource},
+			{Label: "Effective rootfs", Value: effectiveRootfs},
+			{Label: "Module count", Value: strconv.Itoa(moduleCount)},
+			{Label: "Theme count", Value: strconv.Itoa(themeCount)},
+			{Label: "Versioned contrib modules", Value: strconv.Itoa(versionedContribCount)},
+			{Label: "Composer patches", Value: strconv.FormatBool(hasComposerPatches)},
+		}),
+	}, "\n")
 }
 
 func renderCachePageSummary(runCtx context.Context) (string, error) {

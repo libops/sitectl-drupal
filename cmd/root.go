@@ -14,8 +14,8 @@ func init() {
 	loginCmd.Flags().Uint("uid", 1, "Drupal user ID to generate the login link for.")
 }
 
-// RegisterCommands registers all drupal commands with the plugin SDK
-func RegisterCommands(s *plugin.SDK) {
+// RegisterCommands registers all Drupal commands with the plugin SDK.
+func RegisterCommands(s *plugin.SDK) error {
 	sdk = s
 	sdk.SetComposeProjectDiscovery(plugin.ComposeProjectDiscovery{
 		RequiredServices:          []string{"drupal"},
@@ -23,18 +23,20 @@ func RegisterCommands(s *plugin.SDK) {
 		Reason:                    "drupal service without drupal/islandora in composer.json",
 	})
 	pluginjobs.Register(s)
-	sdk.AddCommand(sdk.GetDiscoveryMetadataCommand())
-	sdk.AddCommand(componentExtensionCmd)
-	sdk.RegisterStandardComposeTemplate(createDefinition(), plugin.StandardComposeTemplateOptions{
+	if err := registerDrupalComponents(s); err != nil {
+		return err
+	}
+	sdk.RegisterComposeTemplateCreateRunner(createDefinition(), plugin.ComposeTemplateCreateOptions{
 		DefaultPath:         "./drupal",
 		DefaultPlugin:       "drupal",
 		DefaultDrupalRootfs: drupalCreateDrupalRoot,
 		DrupalContainerRoot: drupalContainerRoot,
 		ReadyMessage:        "Drupal is ready for use through sitectl.",
-		DisplayName:         "Drupal",
 	})
-	sdk.RegisterDebugHandler(&drupalDebugRunner{})
+	sdk.RegisterDebugRunner(&drupalDebugRunner{})
+	sdk.RegisterHealthcheckRunner(drupalHealthcheckRunner{})
 	sdk.AddCommand(drushCmd)
 	sdk.AddCommand(loginCmd)
 	sdk.AddCommand(syncCmd)
+	return nil
 }

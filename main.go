@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/libops/sitectl-drupal/cmd"
 	"github.com/libops/sitectl/pkg/plugin"
@@ -22,7 +23,10 @@ func main() {
 		TemplateRepo: "https://github.com/libops/drupal",
 	})
 
-	cmd.RegisterCommands(sdk)
+	if err := cmd.RegisterCommands(sdk); err != nil {
+		fmt.Fprintf(os.Stderr, "sitectl-drupal: %v\n", err)
+		os.Exit(1)
+	}
 
 	sdk.Execute()
 }

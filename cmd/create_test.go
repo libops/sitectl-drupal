@@ -31,13 +31,31 @@ func TestCreateDefinition(t *testing.T) {
 	}
 }
 
-func TestRegisterCommandsAddsStandardComposeCommands(t *testing.T) {
+func TestRegisterCommandsKeepsCoreLifecycleCommandsOutOfPlugin(t *testing.T) {
 	sdk := plugin.NewSDK(plugin.Metadata{Name: "drupal"})
-	RegisterCommands(sdk)
+	if err := RegisterCommands(sdk); err != nil {
+		t.Fatalf("RegisterCommands() error = %v", err)
+	}
 
 	for _, name := range []string{"build", "init", "up", "down", "status", "logs", "rollout"} {
-		if _, _, err := sdk.RootCmd.Find([]string{name}); err != nil {
-			t.Fatalf("expected %q command to be registered: %v", name, err)
+		if hasRootCommand(sdk, name) {
+			t.Fatalf("did not expect core lifecycle command %q to be registered by the plugin", name)
 		}
 	}
+
+	for _, name := range []string{"drush", "uli", "sync"} {
+		if !hasRootCommand(sdk, name) {
+			t.Fatalf("expected plugin command %q to be registered", name)
+		}
+	}
+
+}
+
+func hasRootCommand(sdk *plugin.SDK, name string) bool {
+	for _, cmd := range sdk.RootCmd.Commands() {
+		if cmd.Name() == name {
+			return true
+		}
+	}
+	return false
 }
