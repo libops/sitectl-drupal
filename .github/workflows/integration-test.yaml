@@ -30,7 +30,7 @@ jobs:
           go-version: ">=1.26.1"
 
       - name: Install sitectl
-        uses: libops/.github/.github/actions/install-sitectl@main
+        uses: libops/.github/.github/actions/install-sitectl@8cdff451294d4663695a9f326ec3a38ddd87f573 # main
 
       - name: setup git identity
         run: |
