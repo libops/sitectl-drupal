@@ -20,8 +20,11 @@ func TestCreateDefinition(t *testing.T) {
 	if !spec.Default {
 		t.Fatal("expected Drupal create definition to be the default")
 	}
-	if len(spec.DockerComposeInit) == 0 || spec.DockerComposeInit[0] != "./scripts/init.sh" {
-		t.Fatalf("expected init script create command, got %+v", spec.DockerComposeInit)
+	if len(spec.DockerComposeInit) != 4 || spec.DockerComposeInit[0] != "if [ ! -f .env ]; then cp sample.env .env; fi" {
+		t.Fatalf("expected inline init create commands, got %+v", spec.DockerComposeInit)
+	}
+	if spec.DockerComposeInit[3] != "docker compose run --rm -e HOST_UID=\"$(id -u)\" -e HOST_GID=\"$(id -g)\" init" {
+		t.Fatalf("expected init service command, got %+v", spec.DockerComposeInit)
 	}
 	if len(spec.DockerComposeUp) == 0 || spec.DockerComposeUp[0] != "docker compose up --remove-orphans -d" {
 		t.Fatalf("expected compose up create command, got %+v", spec.DockerComposeUp)
