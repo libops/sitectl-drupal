@@ -6,7 +6,9 @@ import (
 
 	corecomponent "github.com/libops/sitectl/pkg/component"
 	"github.com/libops/sitectl/pkg/plugin"
+	coredevmode "github.com/libops/sitectl/pkg/services/devmode"
 	memcachedcomponent "github.com/libops/sitectl/pkg/services/memcached"
+	coretraefik "github.com/libops/sitectl/pkg/services/traefik"
 )
 
 const (
@@ -96,5 +98,27 @@ func drupalServiceComponents() ([]corecomponent.ComposeServiceComponent, error) 
 	if err != nil {
 		return nil, err
 	}
-	return []corecomponent.ComposeServiceComponent{memcached}, nil
+	reverseProxy, err := coretraefik.ReverseProxy(coretraefik.ReverseProxyOptions{AppService: "drupal"})
+	if err != nil {
+		return nil, err
+	}
+	uploadLimits, err := coretraefik.UploadLimits(coretraefik.UploadLimitsOptions{AppService: "drupal"})
+	if err != nil {
+		return nil, err
+	}
+	devMode, err := coredevmode.Component(coredevmode.Options{
+		AppService: "drupal",
+		Volumes: []string{
+			"./assets:/var/www/drupal/assets:z,rw",
+			"./composer.json:/var/www/drupal/composer.json:z,rw",
+			"./composer.lock:/var/www/drupal/composer.lock:z,rw",
+			"./config:/var/www/drupal/config:z,rw",
+			"./web/modules/custom:/var/www/drupal/web/modules/custom:z,rw",
+			"./web/themes/custom:/var/www/drupal/web/themes/custom:z,rw",
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return []corecomponent.ComposeServiceComponent{memcached, reverseProxy, uploadLimits, devMode}, nil
 }
