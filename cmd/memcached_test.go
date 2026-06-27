@@ -14,11 +14,22 @@ func TestDrupalMemcachedComponentDefinition(t *testing.T) {
 	if err != nil {
 		t.Fatalf("drupalServiceComponents() error = %v", err)
 	}
-	if len(components) != 1 {
-		t.Fatalf("expected one Drupal service component, got %d", len(components))
+	if len(components) != 4 {
+		t.Fatalf("expected four Drupal service components, got %d", len(components))
 	}
 
-	def := components[0].Definition()
+	definitions := map[string]corecomponent.Definition{}
+	for _, component := range components {
+		def := component.Definition()
+		definitions[def.Name] = def
+	}
+	for _, name := range []string{"memcached", "reverse-proxy", "upload-limits", "dev-mode"} {
+		if _, ok := definitions[name]; !ok {
+			t.Fatalf("expected component %q in definitions %#v", name, definitions)
+		}
+	}
+
+	def := definitions["memcached"]
 	if def.Name != "memcached" {
 		t.Fatalf("expected memcached component, got %q", def.Name)
 	}
