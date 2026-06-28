@@ -34,7 +34,7 @@ func RegisterCommands(s *plugin.SDK) error {
 		ReadyMessage:        "Drupal is ready for use through sitectl.",
 	})
 	sdk.RegisterDebugRunner(&drupalDebugRunner{})
-	sdk.RegisterHealthcheckRunner(drupalHealthcheckRunner{})
+	sdk.RegisterHealthcheckRunner(drupalHealthcheckRunner)
 	sdk.AddCommand(drushCmd)
 	sdk.AddCommand(loginCmd)
 	sdk.AddCommand(syncCmd)
