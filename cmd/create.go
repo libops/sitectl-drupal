@@ -21,7 +21,7 @@ func createDefinition() plugin.CreateSpec {
 		DockerComposeBranch: drupalCreateBranch,
 		DockerComposeBuild: []string{
 			"docker compose pull --ignore-buildable --ignore-pull-failures",
-			"docker compose build --pull",
+			"docker compose build",
 		},
 		Images: []plugin.ComposeImageSpec{
 			{Service: "drupal", Image: "libops/drupal:php84", BuildPolicy: plugin.BuildPolicyIfNotPresent},
