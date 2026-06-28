@@ -44,8 +44,15 @@ func createDefinition() plugin.CreateSpec {
 			{Path: "secrets/DRUPAL_DEFAULT_DB_PASSWORD"},
 			{Path: "secrets/DRUPAL_DEFAULT_SALT"},
 		},
-		DockerComposeUp:      []string{"docker compose up --remove-orphans -d"},
-		DockerComposeDown:    []string{"docker compose down"},
-		DockerComposeRollout: []string{"./scripts/rollout.sh"},
+		DockerComposeUp:   []string{"docker compose up --remove-orphans -d"},
+		DockerComposeDown: []string{"docker compose down"},
+		DockerComposeRollout: []string{
+			"docker compose pull --ignore-buildable --quiet || docker compose pull --ignore-buildable || true",
+			"docker compose build --pull",
+			"docker compose up --remove-orphans --wait --pull missing --quiet-pull -d",
+			"docker compose exec -T drupal drush updb -y || echo \"Drupal database update skipped or failed\"",
+			"docker compose exec -T drupal drush cr || echo \"Drupal cache rebuild skipped or failed\"",
+			"docker compose up --remove-orphans --wait --pull missing --quiet-pull -d",
+		},
 	}
 }

@@ -44,8 +44,8 @@ func TestCreateDefinition(t *testing.T) {
 	if len(spec.DockerComposeUp) == 0 || spec.DockerComposeUp[0] != "docker compose up --remove-orphans -d" {
 		t.Fatalf("expected compose up create command, got %+v", spec.DockerComposeUp)
 	}
-	if len(spec.DockerComposeRollout) == 0 || spec.DockerComposeRollout[0] != "./scripts/rollout.sh" {
-		t.Fatalf("expected rollout script command, got %+v", spec.DockerComposeRollout)
+	if len(spec.DockerComposeRollout) == 0 || spec.DockerComposeRollout[0] == "./scripts/rollout.sh" {
+		t.Fatalf("expected inline rollout commands, got %+v", spec.DockerComposeRollout)
 	}
 }
 
