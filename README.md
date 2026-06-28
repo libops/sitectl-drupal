@@ -1,6 +1,6 @@
 # sitectl-drupal
 
-`sitectl-drupal` adds Drupal create metadata, Drush helpers, development-mode wiring, sync commands, login links, validation, health checks, and component support to [`sitectl`](https://sitectl.libops.io). It works with the [LibOps Drupal template](https://github.com/libops/drupal).
+`sitectl-drupal` simplifies the creation and operation of repositories created using the [LibOps Drupal template](https://github.com/libops/drupal). It provides sitectl commands for Drush, development mode, config sync, login links, validation, health checks, and component-driven customization.
 
 Documentation: https://sitectl.libops.io/plugins/drupal
 
