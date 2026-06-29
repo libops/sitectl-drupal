@@ -26,11 +26,26 @@ func TestCreateDefinition(t *testing.T) {
 	if spec.DockerComposeInit[3] != "docker compose run --rm -e HOST_UID=\"$(id -u)\" -e HOST_GID=\"$(id -g)\" init" {
 		t.Fatalf("expected init service command, got %+v", spec.DockerComposeInit)
 	}
+	if len(spec.InitArtifacts) == 0 || spec.InitArtifacts[0].Path != ".env" {
+		t.Fatalf("expected explicit init artifacts, got %+v", spec.InitArtifacts)
+	}
+	var foundUID bool
+	for _, artifact := range spec.InitArtifacts {
+		if artifact.Path == "certs/UID" && artifact.ValueFrom == plugin.InitArtifactValueFromHostUID {
+			foundUID = true
+		}
+	}
+	if !foundUID {
+		t.Fatalf("expected host UID init artifact, got %+v", spec.InitArtifacts)
+	}
+	if len(spec.Images) != 1 || spec.Images[0].Service != "drupal" || spec.Images[0].Image != "libops/drupal:php84" {
+		t.Fatalf("expected Drupal image spec, got %+v", spec.Images)
+	}
 	if len(spec.DockerComposeUp) == 0 || spec.DockerComposeUp[0] != "docker compose up --remove-orphans -d" {
 		t.Fatalf("expected compose up create command, got %+v", spec.DockerComposeUp)
 	}
-	if len(spec.DockerComposeRollout) == 0 || spec.DockerComposeRollout[0] != "./scripts/rollout.sh" {
-		t.Fatalf("expected rollout script command, got %+v", spec.DockerComposeRollout)
+	if len(spec.DockerComposeRollout) == 0 || spec.DockerComposeRollout[0] == "./scripts/rollout.sh" {
+		t.Fatalf("expected inline rollout commands, got %+v", spec.DockerComposeRollout)
 	}
 }
 
