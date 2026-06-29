@@ -20,14 +20,11 @@ func TestCreateDefinition(t *testing.T) {
 	if !spec.Default {
 		t.Fatal("expected Drupal create definition to be the default")
 	}
-	if len(spec.DockerComposeInit) != 4 || spec.DockerComposeInit[0] != "if [ ! -f .env ]; then cp sample.env .env; fi" {
+	if len(spec.DockerComposeInit) != 3 || spec.DockerComposeInit[0] != "mkdir -p ./certs" {
 		t.Fatalf("expected inline init create commands, got %+v", spec.DockerComposeInit)
 	}
-	if spec.DockerComposeInit[3] != "docker compose run --rm -e HOST_UID=\"$(id -u)\" -e HOST_GID=\"$(id -g)\" init" {
+	if spec.DockerComposeInit[2] != "docker compose run --rm -e HOST_UID=\"$(id -u)\" -e HOST_GID=\"$(id -g)\" init" {
 		t.Fatalf("expected init service command, got %+v", spec.DockerComposeInit)
-	}
-	if len(spec.InitArtifacts) == 0 || spec.InitArtifacts[0].Path != ".env" {
-		t.Fatalf("expected explicit init artifacts, got %+v", spec.InitArtifacts)
 	}
 	var foundUID bool
 	for _, artifact := range spec.InitArtifacts {
