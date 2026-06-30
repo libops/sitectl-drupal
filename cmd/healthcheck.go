@@ -6,7 +6,7 @@ var drupalHealthcheckRunner = plugin.StandardComposeWebHealthcheck(plugin.Standa
 	AppService:              "drupal",
 	HTTPName:                "http:drupal",
 	DefaultScheme:           "http",
-	DefaultDomain:           "drupal.traefik.me",
+	DefaultDomain:           "localhost",
 	DatabaseService:         "mariadb",
 	CheckDatabaseDependency: true,
 	SolrService:             "solr",
