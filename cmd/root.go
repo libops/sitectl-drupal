@@ -6,8 +6,9 @@ import (
 )
 
 var (
-	drupalServiceName = func() *string { s := "drupal"; return &s }()
-	sdk               *plugin.SDK
+	drupalServiceName                  = func() *string { s := "drupal"; return &s }()
+	drupalForbiddenISLEProjectServices = []string{"activemq", "alpaca", "blazegraph", "cantaloupe", "fcrepo", "milliner", "triplet"}
+	sdk                                *plugin.SDK
 )
 
 func init() {
@@ -19,8 +20,9 @@ func RegisterCommands(s *plugin.SDK) error {
 	sdk = s
 	sdk.SetComposeProjectDiscovery(plugin.ComposeProjectDiscovery{
 		RequiredServices:          []string{"drupal"},
+		ForbiddenServices:         drupalForbiddenISLEProjectServices,
 		ForbiddenComposerPackages: []string{"drupal/islandora"},
-		Reason:                    "drupal service without drupal/islandora in composer.json",
+		Reason:                    "drupal service without drupal/islandora in composer.json or ISLE services",
 	})
 	pluginjobs.Register(s)
 	if err := registerDrupalComponents(s); err != nil {
