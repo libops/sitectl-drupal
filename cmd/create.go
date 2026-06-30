@@ -27,13 +27,11 @@ func createDefinition() plugin.CreateSpec {
 			{Service: "drupal", Image: "libops/drupal:php84", BuildPolicy: plugin.BuildPolicyIfNotPresent},
 		},
 		DockerComposeInit: []string{
-			"if [ ! -f .env ]; then cp sample.env .env; fi",
 			"mkdir -p ./certs",
 			"id -u > ./certs/UID",
 			"docker compose run --rm -e HOST_UID=\"$(id -u)\" -e HOST_GID=\"$(id -g)\" init",
 		},
 		InitArtifacts: []plugin.InitArtifact{
-			{Path: ".env"},
 			{Path: "certs/cert.pem"},
 			{Path: "certs/privkey.pem"},
 			{Path: "certs/rootCA.pem"},

@@ -98,11 +98,23 @@ func drupalServiceComponents() ([]corecomponent.ComposeServiceComponent, error) 
 	if err != nil {
 		return nil, err
 	}
-	reverseProxy, err := coretraefik.ReverseProxy(coretraefik.ReverseProxyOptions{AppService: "drupal"})
-	if err != nil {
-		return nil, err
-	}
-	uploadLimits, err := coretraefik.UploadLimits(coretraefik.UploadLimitsOptions{AppService: "drupal"})
+	ingress, err := coretraefik.Ingress(coretraefik.IngressOptions{
+		AppService:      "drupal",
+		HTTPEntrypoint:  "http",
+		HTTPSEntrypoint: "https",
+		RouterHosts: map[string]string{
+			"drupal":  "{domain}",
+			"solr":    "solr.{domain}",
+			"traefik": "traefik.{domain}",
+		},
+		ServiceEnvTemplates: map[string]map[string]string{
+			"drupal": {
+				"DRUPAL_DEFAULT_SITE_URL": "{base_url}",
+				"DRUPAL_ENABLE_HTTPS":     "{https_enabled}",
+				"DRUSH_OPTIONS_URI":       "{base_url}",
+			},
+		},
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -120,5 +132,5 @@ func drupalServiceComponents() ([]corecomponent.ComposeServiceComponent, error) 
 	if err != nil {
 		return nil, err
 	}
-	return []corecomponent.ComposeServiceComponent{memcached, reverseProxy, uploadLimits, devMode}, nil
+	return []corecomponent.ComposeServiceComponent{memcached, ingress, devMode}, nil
 }
