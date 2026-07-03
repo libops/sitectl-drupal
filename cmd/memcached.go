@@ -107,12 +107,11 @@ func drupalServiceComponents() ([]corecomponent.ComposeServiceComponent, error) 
 			"solr":    "solr.{domain}",
 			"traefik": "traefik.{domain}",
 		},
-		ServiceEnvTemplates: map[string]map[string]string{
-			"drupal": {
-				"DRUPAL_DEFAULT_SITE_URL": "{base_url}",
-				"DRUPAL_ENABLE_HTTPS":     "{https_enabled}",
-				"DRUSH_OPTIONS_URI":       "{base_url}",
-			},
+		AppEnvDeletes: []string{
+			"DRUPAL_DEFAULT_SITE_URL",
+			"DRUPAL_ENABLE_HTTPS",
+			"DRUPAL_TRUSTED_HOST_PATTERNS",
+			"DRUSH_OPTIONS_URI",
 		},
 	})
 	if err != nil {

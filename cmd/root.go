@@ -38,10 +38,8 @@ func RegisterCommands(s *plugin.SDK) error {
 	sdk.RegisterDebugRunner(&drupalDebugRunner{})
 	sdk.RegisterHealthcheckRunner(drupalHealthcheckRunner)
 	sdk.RegisterIngressRouteProvider(plugin.StandardComposeWebIngressRoutesWithOptions(plugin.StandardComposeWebIngressOptions{
-		AppService:     "drupal",
-		Router:         "drupal",
-		URLVariables:   []string{"DRUPAL_DEFAULT_SITE_URL", "DRUSH_OPTIONS_URI"},
-		HTTPSVariables: []string{"DRUPAL_ENABLE_HTTPS"},
+		AppService: "drupal",
+		Router:     "drupal",
 	}))
 	sdk.AddCommand(drushCmd)
 	sdk.AddCommand(loginCmd)
