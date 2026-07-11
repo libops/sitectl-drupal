@@ -46,11 +46,10 @@ Use [`sitectl image`](https://sitectl.libops.io/commands/image) for local image 
 sitectl image set --tag drupal=nginx-1.30.3-php84
 ```
 
-Use [`sitectl set`](https://sitectl.libops.io/commands/set) and [`sitectl converge`](https://sitectl.libops.io/commands/converge) for component changes:
+Use [`sitectl set`](https://sitectl.libops.io/commands/set) for component changes; it updates component-owned files immediately:
 
 ```bash
 sitectl set dev-mode enabled
-sitectl converge
 ```
 
 See the [Drupal plugin docs](https://sitectl.libops.io/plugins/drupal) for Drush, sync, ULI, and Drupal-specific workflows.

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/libops/sitectl/pkg/plugin"
@@ -38,11 +39,34 @@ func TestCreateDefinition(t *testing.T) {
 	if len(spec.Images) != 1 || spec.Images[0].Service != "drupal" || spec.Images[0].Image != "libops/drupal:php84" {
 		t.Fatalf("expected Drupal image spec, got %+v", spec.Images)
 	}
-	if len(spec.DockerComposeUp) == 0 || spec.DockerComposeUp[0] != "docker compose up --remove-orphans -d" {
-		t.Fatalf("expected compose up create command, got %+v", spec.DockerComposeUp)
+	if spec.Images[0].BuildPolicy != plugin.BuildPolicyAlways {
+		t.Fatalf("expected downstream Drupal image to always build, got %q", spec.Images[0].BuildPolicy)
+	}
+	if len(spec.DockerComposeUp) != 1 || !strings.Contains(spec.DockerComposeUp[0], "--wait --wait-timeout 600") {
+		t.Fatalf("create must wait for service health before reporting ready: %+v", spec.DockerComposeUp)
 	}
 	if len(spec.DockerComposeRollout) == 0 || spec.DockerComposeRollout[0] == "./scripts/rollout.sh" {
 		t.Fatalf("expected inline rollout commands, got %+v", spec.DockerComposeRollout)
+	}
+	foundMigration := false
+	for index, command := range spec.DockerComposeRollout {
+		if !strings.Contains(command, "drush updb") {
+			continue
+		}
+		foundMigration = true
+		if strings.Contains(command, "||") || index < 2 || !strings.Contains(spec.DockerComposeRollout[index-1], "test -f /installed") || !strings.Contains(spec.DockerComposeRollout[index-1], "-ge 150") || strings.Contains(spec.DockerComposeRollout[index-2], "--wait") {
+			t.Fatalf("Drupal migration must fail hard after bounded readiness and a non-waiting start: %+v", spec.DockerComposeRollout)
+		}
+		if index+2 >= len(spec.DockerComposeRollout) || !strings.Contains(spec.DockerComposeRollout[index+2], "--wait --wait-timeout 600") {
+			t.Fatalf("cache rebuild and final health wait must follow migration: %+v", spec.DockerComposeRollout)
+		}
+		cacheRebuild := spec.DockerComposeRollout[index+1]
+		if !strings.Contains(cacheRebuild, "drush cr") || strings.Contains(cacheRebuild, "||") {
+			t.Fatalf("Drupal cache rebuild must fail the rollout when it fails: %+v", spec.DockerComposeRollout)
+		}
+	}
+	if !foundMigration {
+		t.Fatalf("Drupal rollout must run the database migration: %+v", spec.DockerComposeRollout)
 	}
 }
 

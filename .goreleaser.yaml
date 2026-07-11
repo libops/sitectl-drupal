@@ -1,6 +1,7 @@
 version: 2
 before:
   hooks:
+    - ./scripts/check-sitectl-core-version.sh v0.37.0
     - go mod tidy
 builds:
   - binary: sitectl-drupal
@@ -67,3 +68,13 @@ nfpms:
       - sitectl-drupal
     dependencies:
       - sitectl
+    overrides:
+      deb:
+        dependencies:
+          - sitectl (>= 0.37.0)
+      rpm:
+        dependencies:
+          - sitectl >= 0.37.0
+      apk:
+        dependencies:
+          - sitectl>=0.37.0

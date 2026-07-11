@@ -24,7 +24,7 @@ func createDefinition() plugin.CreateSpec {
 			"docker compose build",
 		},
 		Images: []plugin.ComposeImageSpec{
-			{Service: "drupal", Image: "libops/drupal:php84", BuildPolicy: plugin.BuildPolicyIfNotPresent},
+			{Service: "drupal", Image: "libops/drupal:php84", BuildPolicy: plugin.BuildPolicyAlways},
 		},
 		DockerComposeInit: []string{
 			"mkdir -p ./certs",
@@ -42,15 +42,16 @@ func createDefinition() plugin.CreateSpec {
 			{Path: "secrets/DRUPAL_DEFAULT_DB_PASSWORD"},
 			{Path: "secrets/DRUPAL_DEFAULT_SALT"},
 		},
-		DockerComposeUp:   []string{"docker compose up --remove-orphans -d"},
+		DockerComposeUp:   []string{"docker compose up --remove-orphans --wait --wait-timeout 600 -d"},
 		DockerComposeDown: []string{"docker compose down"},
 		DockerComposeRollout: []string{
-			"docker compose pull --ignore-buildable --quiet || docker compose pull --ignore-buildable || true",
+			"docker compose pull --ignore-buildable --quiet || docker compose pull --ignore-buildable",
 			"docker compose build --pull",
-			"docker compose up --remove-orphans --wait --pull missing --quiet-pull -d",
-			"docker compose exec -T drupal drush updb -y || echo \"Drupal database update skipped or failed\"",
-			"docker compose exec -T drupal drush cr || echo \"Drupal cache rebuild skipped or failed\"",
-			"docker compose up --remove-orphans --wait --pull missing --quiet-pull -d",
+			"docker compose up --remove-orphans --pull missing --quiet-pull -d",
+			"docker compose exec -T drupal sh -c 'attempt=0; until test -f /installed; do attempt=$((attempt + 1)); if [ \"$attempt\" -ge 150 ]; then echo \"Drupal did not become ready for database migration within 5 minutes\" >&2; exit 1; fi; sleep 2; done'",
+			"docker compose exec -T drupal drush updb -y",
+			"docker compose exec -T drupal drush cr",
+			"docker compose up --remove-orphans --wait --wait-timeout 600 --pull missing --quiet-pull -d",
 		},
 	}
 }

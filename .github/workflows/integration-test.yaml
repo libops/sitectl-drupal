@@ -22,15 +22,15 @@ jobs:
           - create_definition: default
             create_args: ""
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Set up Go
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
-          go-version: ">=1.26.1"
+          go-version: "1.26.x"
 
       - name: Install sitectl
-        uses: libops/.github/.github/actions/install-sitectl@main
+        uses: libops/.github/.github/actions/install-sitectl@8f2eb98981e477cb8ac65d24c6fe06f45e31159c # main
 
       - name: setup git identity
         run: |
