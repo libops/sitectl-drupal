@@ -47,7 +47,7 @@ func createDefinition() plugin.CreateSpec {
 		DockerComposeRollout: []string{
 			"docker compose pull --ignore-buildable --quiet || docker compose pull --ignore-buildable",
 			"docker compose build --pull",
-			"docker compose up --remove-orphans --pull missing --quiet-pull -d",
+			"docker compose up --remove-orphans --pull missing --quiet-pull -d drupal",
 			"docker compose exec -T drupal sh -c 'attempt=0; until test -f /installed; do attempt=$((attempt + 1)); if [ \"$attempt\" -ge 150 ]; then echo \"Drupal did not become ready for database migration within 5 minutes\" >&2; exit 1; fi; sleep 2; done'",
 			"docker compose exec -T drupal drush updb -y",
 			"docker compose exec -T drupal drush cr",

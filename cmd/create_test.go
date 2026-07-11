@@ -54,15 +54,30 @@ func TestCreateDefinition(t *testing.T) {
 			continue
 		}
 		foundMigration = true
-		if strings.Contains(command, "||") || index < 2 || !strings.Contains(spec.DockerComposeRollout[index-1], "test -f /installed") || !strings.Contains(spec.DockerComposeRollout[index-1], "-ge 150") || strings.Contains(spec.DockerComposeRollout[index-2], "--wait") {
-			t.Fatalf("Drupal migration must fail hard after bounded readiness and a non-waiting start: %+v", spec.DockerComposeRollout)
+		if strings.Contains(command, "||") || index < 2 || !strings.Contains(spec.DockerComposeRollout[index-1], "test -f /installed") || !strings.Contains(spec.DockerComposeRollout[index-1], "-ge 150") {
+			t.Fatalf("Drupal migration must fail hard after bounded readiness: %+v", spec.DockerComposeRollout)
 		}
-		if index+2 >= len(spec.DockerComposeRollout) || !strings.Contains(spec.DockerComposeRollout[index+2], "--wait --wait-timeout 600") {
+		initialStart := spec.DockerComposeRollout[index-2]
+		wantInitialStart := "docker compose up --remove-orphans --pull missing --quiet-pull -d drupal"
+		if initialStart != wantInitialStart ||
+			!strings.HasSuffix(initialStart, " -d drupal") ||
+			strings.Contains(initialStart, "--wait") {
+			t.Fatalf("initial rollout start must target only Drupal without waiting: %q", initialStart)
+		}
+		if index+2 >= len(spec.DockerComposeRollout) {
 			t.Fatalf("cache rebuild and final health wait must follow migration: %+v", spec.DockerComposeRollout)
 		}
 		cacheRebuild := spec.DockerComposeRollout[index+1]
 		if !strings.Contains(cacheRebuild, "drush cr") || strings.Contains(cacheRebuild, "||") {
 			t.Fatalf("Drupal cache rebuild must fail the rollout when it fails: %+v", spec.DockerComposeRollout)
+		}
+		finalStart := spec.DockerComposeRollout[index+2]
+		wantFinalStart := "docker compose up --remove-orphans --wait --wait-timeout 600 --pull missing --quiet-pull -d"
+		if finalStart != wantFinalStart ||
+			!strings.Contains(finalStart, "--wait --wait-timeout 600") ||
+			!strings.HasSuffix(finalStart, " -d") ||
+			strings.Contains(finalStart, "||") {
+			t.Fatalf("final rollout start must wait for the full stack and fail hard: %q", finalStart)
 		}
 	}
 	if !foundMigration {
