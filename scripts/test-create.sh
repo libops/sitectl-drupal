@@ -57,10 +57,10 @@ assert_template_lock() {
 	test "$(stat -c '%a' "${lock}")" = "644"
 	grep -Fxq 'apiVersion: sitectl.libops.io/v1alpha1' "${lock}"
 	grep -Fxq 'kind: TemplateLock' "${lock}"
-	grep -Eq '^  commit: [0-9a-f]{40}([0-9a-f]{24})?$' "${lock}"
-	grep -Fxq "  repository: https://github.com/libops/${PLUGIN_NAME}" "${lock}"
-	grep -Eq '^    digest: sha256:[0-9a-f]{64}$' "${lock}"
-	grep -Fxq '  revision: v1.0.0' "${lock}"
+	grep -Eq '^    commit: [0-9a-f]{40}([0-9a-f]{24})?$' "${lock}"
+	grep -Fxq "    repository: https://github.com/libops/${PLUGIN_NAME}" "${lock}"
+	grep -Eq '^        digest: sha256:[0-9a-f]{64}$' "${lock}"
+	grep -Fxq '    revision: v1.0.0' "${lock}"
 }
 
 create_site() {
