@@ -6,7 +6,7 @@ Documentation: https://sitectl.libops.io/plugins/drupal
 
 ## Requirements
 
-- [`sitectl`](https://sitectl.libops.io/install).
+- [`sitectl`](https://sitectl.libops.io/install) v1.0.0 or newer, using RPC protocol 1.
 - Docker with the Compose v2 plugin for local Drupal sites.
 - No additional app-plugin dependency beyond core `sitectl`.
 
