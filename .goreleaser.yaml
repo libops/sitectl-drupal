@@ -45,6 +45,7 @@ brews:
   - name: sitectl-drupal
     description: "A sitectl plugin for Drupal websites"
     homepage: "https://github.com/libops/sitectl-drupal"
+    url_template: "https://github.com/libops/sitectl-drupal/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
     license: MIT
     commit_author:
       name: sitectl-dev[bot]
