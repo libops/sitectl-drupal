@@ -41,8 +41,10 @@ func RegisterCommands(s *plugin.SDK) error {
 		AppService: "drupal",
 		Router:     "drupal",
 	}))
+	sdk.AddCommand(composerCmd)
 	sdk.AddCommand(drushCmd)
 	sdk.AddCommand(loginCmd)
+	sdk.AddCommand(solrConfigCmd)
 	sdk.AddCommand(syncCmd)
 	return nil
 }
