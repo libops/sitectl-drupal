@@ -4,7 +4,7 @@ go 1.26.1
 
 require (
 	github.com/docker/docker v28.5.2+incompatible
-	github.com/libops/sitectl v1.2.0
+	github.com/libops/sitectl v1.3.0
 	github.com/pkg/sftp v1.13.10
 	github.com/spf13/cobra v1.10.2
 	gopkg.in/yaml.v3 v3.0.1
@@ -68,5 +68,5 @@ require (
 	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/term v0.44.0 // indirect
-	golang.org/x/text v0.38.0 // indirect
+	golang.org/x/text v0.39.0 // indirect
 )
