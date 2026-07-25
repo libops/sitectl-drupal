@@ -69,6 +69,7 @@ create_site() {
 	if [ -n "${CREATE_ARGS}" ]; then
 		read -r -a extra_args <<< "${CREATE_ARGS}"
 	fi
+	extra_args+=(--yolo)
 
 	HOME="${SITECTL_HOME}" sitectl create "${target}" \
 		--path "${SITE_DIR}" \
