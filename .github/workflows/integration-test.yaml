@@ -20,9 +20,7 @@ jobs:
       matrix:
         include:
           - create_definition: default
-            create_args: >-
-              --template-repo https://github.com/libops/drupal
-              --template-branch priority-review-remediation
+            create_args: ""
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
