@@ -4,7 +4,7 @@ import "github.com/libops/sitectl/pkg/plugin"
 
 const (
 	drupalCreateRepo       = "https://github.com/libops/drupal"
-	drupalCreateBranch     = "v1.0.0"
+	drupalCreateBranch     = "v1.1.0"
 	drupalCreateDrupalRoot = "."
 	drupalContainerRoot    = "/var/www/drupal"
 	drushExecutable        = "/var/www/drupal/vendor/bin/drush"
