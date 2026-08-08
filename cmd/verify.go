@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/libops/sitectl/pkg/config"
@@ -14,6 +15,8 @@ import (
 )
 
 const drupalQueueProbe = `$cron = \Drupal::service('cron'); $workers = \Drupal::service('plugin.manager.queue_worker')->getDefinitions(); print json_encode(['cron' => $cron !== NULL, 'queue_workers' => count($workers)]);`
+
+const drupalSolrProbe = `$server = \Drupal::entityTypeManager()->getStorage('search_api_server')->load('default_solr_server'); print json_encode(['exists' => $server !== NULL, 'enabled' => $server ? (bool) $server->status() : false, 'available' => $server ? (bool) $server->isAvailable() : false]);`
 
 type drupalVerifyRuntime interface {
 	ExecCapture(context.Context, string, string, []string) (string, error)
@@ -83,7 +86,7 @@ func runDrupalVerifyChecks(ctx context.Context, runtime drupalVerifyRuntime, con
 		},
 		{
 			name: "verify:drupal:solr",
-			argv: []string{drushExecutable, "search-api:server-status", "default_solr_server", "--format=json"},
+			argv: []string{drushExecutable, "php:eval", drupalSolrProbe},
 			read: verifyDrupalSolr,
 			fix:  "check the default_solr_server configuration and Solr connectivity",
 		},
@@ -130,9 +133,59 @@ func verifyDrupalConfigDrift(output string) sitevalidate.Result {
 		clean = len(typed) == 0
 	}
 	if !clean {
-		return verifyFailed("verify:drupal:config-drift", "active Drupal configuration differs from the sync directory", "export intentional changes or import the committed configuration")
+		detail := "active Drupal configuration differs from the sync directory"
+		if differences := describeDrupalConfigDrift(value); len(differences) > 0 {
+			detail += ": " + strings.Join(differences, ", ")
+		}
+		return verifyFailed("verify:drupal:config-drift", detail, "export intentional changes or import the committed configuration")
 	}
 	return verifyOK("verify:drupal:config-drift", "active configuration matches the sync directory")
+}
+
+func describeDrupalConfigDrift(value any) []string {
+	differences := make([]string, 0)
+	appendDifference := func(name, state string) {
+		name = strings.TrimSpace(name)
+		state = strings.TrimSpace(state)
+		if name == "" {
+			return
+		}
+		if state != "" {
+			name += " (" + state + ")"
+		}
+		differences = append(differences, name)
+	}
+
+	readRow := func(fallback string, row any) {
+		fields, ok := row.(map[string]any)
+		if !ok {
+			appendDifference(fallback, "")
+			return
+		}
+		name, _ := fields["name"].(string)
+		state, _ := fields["state"].(string)
+		if name == "" {
+			name = fallback
+		}
+		appendDifference(name, state)
+	}
+
+	switch typed := value.(type) {
+	case map[string]any:
+		for name, row := range typed {
+			readRow(name, row)
+		}
+	case []any:
+		for _, row := range typed {
+			readRow("", row)
+		}
+	}
+	sort.Strings(differences)
+	if len(differences) > 10 {
+		remaining := len(differences) - 10
+		differences = append(differences[:10], fmt.Sprintf("and %d more", remaining))
+	}
+	return differences
 }
 
 func verifyDrupalCronQueue(output string) sitevalidate.Result {
@@ -153,27 +206,24 @@ func verifyDrupalCronQueue(output string) sitevalidate.Result {
 }
 
 func verifyDrupalSolr(output string) sitevalidate.Result {
-	trimmed := strings.TrimSpace(output)
-	if trimmed == "" {
-		return verifyFailed("verify:drupal:solr", "Search API returned no server status", "check the default_solr_server configuration and Solr connectivity")
+	var probe struct {
+		Exists    bool `json:"exists"`
+		Enabled   bool `json:"enabled"`
+		Available bool `json:"available"`
 	}
-	var value any
-	if err := json.Unmarshal([]byte(trimmed), &value); err != nil {
-		return verifyFailed("verify:drupal:solr", fmt.Sprintf("invalid server-status JSON: %v", err), "run drush search-api:server-status and inspect the default_solr_server response")
+	if err := json.Unmarshal([]byte(strings.TrimSpace(output)), &probe); err != nil {
+		return verifyFailed("verify:drupal:solr", fmt.Sprintf("invalid Search API server probe JSON: %v", err), "check the default_solr_server configuration and Search API Solr compatibility")
 	}
-	switch typed := value.(type) {
-	case map[string]any:
-		if len(typed) == 0 {
-			return verifyFailed("verify:drupal:solr", "server-status returned an empty object", "check the default_solr_server configuration and Search API Solr compatibility")
-		}
-	case []any:
-		if len(typed) == 0 {
-			return verifyFailed("verify:drupal:solr", "server-status returned an empty collection", "check the default_solr_server configuration and Search API Solr compatibility")
-		}
-	default:
-		return verifyFailed("verify:drupal:solr", "server-status did not return a JSON object or collection", "inspect Search API Solr command compatibility")
+	if !probe.Exists {
+		return verifyFailed("verify:drupal:solr", "default_solr_server does not exist", "import or recreate the default_solr_server configuration")
 	}
-	return verifyOK("verify:drupal:solr", "Search API reached the default Solr server")
+	if !probe.Enabled {
+		return verifyFailed("verify:drupal:solr", "default_solr_server is disabled", "enable the default_solr_server configuration")
+	}
+	if !probe.Available {
+		return verifyFailed("verify:drupal:solr", "default_solr_server cannot reach Solr", "check the default_solr_server host, port, core, and Solr health")
+	}
+	return verifyOK("verify:drupal:solr", "default_solr_server reached Solr")
 }
 
 func verifyOK(name, detail string) sitevalidate.Result {

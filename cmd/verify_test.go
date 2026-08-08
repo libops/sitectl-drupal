@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	sitevalidate "github.com/libops/sitectl/pkg/validate"
@@ -18,16 +19,19 @@ type fakeDrupalVerifyRuntime struct {
 func (r *fakeDrupalVerifyRuntime) ExecCapture(_ context.Context, _, _ string, argv []string) (string, error) {
 	r.calls = append(r.calls, append([]string(nil), argv...))
 	key := argv[1]
+	if key == "php:eval" && len(argv) > 2 && argv[2] == drupalSolrProbe {
+		key = "solr-probe"
+	}
 	return r.outputs[key], r.errors[key]
 }
 
 func TestRunDrupalVerifyChecksExecutesStrictApplicationAssertions(t *testing.T) {
 	runtime := &fakeDrupalVerifyRuntime{outputs: map[string]string{
-		"status":                   "Successful\n",
-		"sql:query":                "drupal@%\n",
-		"config:status":            "[]\n",
-		"php:eval":                 `{"cron":true,"queue_workers":4}`,
-		"search-api:server-status": `{"status":"available"}`,
+		"status":        "Successful\n",
+		"sql:query":     "drupal@%\n",
+		"config:status": "[]\n",
+		"php:eval":      `{"cron":true,"queue_workers":4}`,
+		"solr-probe":    `{"exists":true,"enabled":true,"available":true}`,
 	}, errors: map[string]error{}}
 
 	results := runDrupalVerifyChecks(context.Background(), runtime, "site-drupal-1", "/var/www/drupal")
@@ -45,6 +49,9 @@ func TestRunDrupalVerifyChecksExecutesStrictApplicationAssertions(t *testing.T) 
 	if got := runtime.calls[3]; !reflect.DeepEqual(got, []string{drushExecutable, "php:eval", drupalQueueProbe}) {
 		t.Fatalf("unexpected queue probe: %#v", got)
 	}
+	if got := runtime.calls[4]; !reflect.DeepEqual(got, []string{drushExecutable, "php:eval", drupalSolrProbe}) {
+		t.Fatalf("unexpected Solr probe: %#v", got)
+	}
 }
 
 func TestRunDrupalVerifyChecksReportsEveryFailedAssertion(t *testing.T) {
@@ -54,7 +61,7 @@ func TestRunDrupalVerifyChecksReportsEveryFailedAssertion(t *testing.T) {
 		"config:status": `{"system.site":"Different"}`,
 		"php:eval":      `{"cron":false,"queue_workers":0}`,
 	}, errors: map[string]error{
-		"search-api:server-status": errors.New("Solr unavailable"),
+		"solr-probe": errors.New("Solr unavailable"),
 	}}
 
 	results := runDrupalVerifyChecks(context.Background(), runtime, "site-drupal-1", "/var/www/drupal")
@@ -76,6 +83,18 @@ func TestVerifyDrupalConfigDriftRejectsMissingOrInvalidJSON(t *testing.T) {
 	}
 }
 
+func TestVerifyDrupalConfigDriftReportsConfigurationNamesAndStates(t *testing.T) {
+	result := verifyDrupalConfigDrift(`{"system.site":{"name":"system.site","state":"Different"},"search_api.server.default_solr_server":{"name":"search_api.server.default_solr_server","state":"Only in DB"}}`)
+	if result.Status != sitevalidate.StatusFailed {
+		t.Fatalf("drift unexpectedly passed: %#v", result)
+	}
+	for _, expected := range []string{"search_api.server.default_solr_server (Only in DB)", "system.site (Different)"} {
+		if !strings.Contains(result.Detail, expected) {
+			t.Fatalf("drift detail %q does not contain %q", result.Detail, expected)
+		}
+	}
+}
+
 func TestVerifyDrupalCronQueueAllowsNoConfiguredWorkers(t *testing.T) {
 	if result := verifyDrupalCronQueue(`{"cron":true,"queue_workers":0}`); result.Status != sitevalidate.StatusOK {
 		t.Fatalf("zero configured workers should be ready: %#v", result)
@@ -86,14 +105,13 @@ func TestVerifyDrupalCronQueueAllowsNoConfiguredWorkers(t *testing.T) {
 }
 
 func TestVerifyDrupalSolrRequiresStructuredCommandEvidence(t *testing.T) {
-	for _, output := range []string{"", `{}`, `[]`, `false`, `not-json`} {
+	for _, output := range []string{"", `{}`, `false`, `not-json`, `{"exists":true,"enabled":false,"available":true}`, `{"exists":true,"enabled":true,"available":false}`} {
 		if result := verifyDrupalSolr(output); result.Status != sitevalidate.StatusFailed {
 			t.Fatalf("Solr status %q unexpectedly passed: %#v", output, result)
 		}
 	}
-	for _, output := range []string{`{"status":true}`, `{"default_solr_server":{"status":"available"}}`, `[{"id":"default_solr_server"}]`} {
-		if result := verifyDrupalSolr(output); result.Status != sitevalidate.StatusOK {
-			t.Fatalf("Solr status %q unexpectedly failed: %#v", output, result)
-		}
+	output := `{"exists":true,"enabled":true,"available":true}`
+	if result := verifyDrupalSolr(output); result.Status != sitevalidate.StatusOK {
+		t.Fatalf("Solr status %q unexpectedly failed: %#v", output, result)
 	}
 }
