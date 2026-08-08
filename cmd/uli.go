@@ -37,7 +37,7 @@ Examples:
 
 		// Capture output to get the URL
 		var stdout, stderr bytes.Buffer
-		drushCmd := []string{"drush", "uli", fmt.Sprintf("--uid=%d", uid)}
+		drushCmd := []string{drushExecutable, "uli", fmt.Sprintf("--uid=%d", uid)}
 
 		exitCode, err := cli.Exec(cmd.Context(), docker.ExecOptions{
 			Container:    containerName,

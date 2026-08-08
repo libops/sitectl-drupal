@@ -266,7 +266,7 @@ func TestRefreshSolrConfigRuntimeDriftReloadsAndReindexes(t *testing.T) {
 	if !runtime.sawSolrAction("STATUS") || !runtime.sawSolrAction("RELOAD") {
 		t.Fatalf("Solr API calls = %v, want STATUS and RELOAD", runtime.execCalls)
 	}
-	if !runtime.sawExec([]string{"drush", "-y", "search-api:reset-tracker"}) || !runtime.sawExec([]string{"drush", "-y", "search-api:index"}) {
+	if !runtime.sawExec([]string{drushExecutable, "-y", "search-api:reset-tracker"}) || !runtime.sawExec([]string{drushExecutable, "-y", "search-api:index"}) {
 		t.Fatalf("Drush calls = %v, want reset and index", runtime.execCalls)
 	}
 	for _, call := range runtime.execCalls {
@@ -381,11 +381,11 @@ func TestRefreshSolrConfigRetriesReloadAndReindexFromDurableState(t *testing.T) 
 	if runtime.sawSolrActionCount("RELOAD") != 3 {
 		t.Fatalf("RELOAD calls = %d, want rejected replacement, restored config, and accepted retry", runtime.sawSolrActionCount("RELOAD"))
 	}
-	if runtime.sawExecCount([]string{"drush", "-y", "search-api:reset-tracker"}) != 1 {
-		t.Fatalf("search-api:reset-tracker calls = %d, want one durable reset", runtime.sawExecCount([]string{"drush", "-y", "search-api:reset-tracker"}))
+	if runtime.sawExecCount([]string{drushExecutable, "-y", "search-api:reset-tracker"}) != 1 {
+		t.Fatalf("search-api:reset-tracker calls = %d, want one durable reset", runtime.sawExecCount([]string{drushExecutable, "-y", "search-api:reset-tracker"}))
 	}
-	if runtime.sawExecCount([]string{"drush", "-y", "search-api:index"}) != 2 {
-		t.Fatalf("search-api:index calls = %d, want 2", runtime.sawExecCount([]string{"drush", "-y", "search-api:index"}))
+	if runtime.sawExecCount([]string{drushExecutable, "-y", "search-api:index"}) != 2 {
+		t.Fatalf("search-api:index calls = %d, want 2", runtime.sawExecCount([]string{drushExecutable, "-y", "search-api:index"}))
 	}
 	if runtime.directories[paths.Pending] || runtime.files[paths.State] != nil {
 		t.Fatal("completed retry left a pending marker")
@@ -482,7 +482,7 @@ func TestRefreshSolrConfigSupersedesAcceptedPendingDigestBeforeReindex(t *testin
 		t.Fatalf("superseding conf = %#v, want newly generated tree", got)
 	}
 	for _, command := range []string{"search-api:reset-tracker", "search-api:index"} {
-		if count := runtime.sawExecCount([]string{"drush", "-y", command}); count != 1 {
+		if count := runtime.sawExecCount([]string{drushExecutable, "-y", command}); count != 1 {
 			t.Fatalf("%s calls = %d, want reindex only after superseding config", command, count)
 		}
 	}
@@ -518,7 +518,7 @@ func TestRefreshSolrConfigDoesNotRepeatCompletedReindexAfterCleanupFailure(t *te
 		t.Fatalf("second refresh result = %+v, want completed transaction cleanup", result)
 	}
 	for _, command := range []string{"search-api:reset-tracker", "search-api:index"} {
-		if count := runtime.sawExecCount([]string{"drush", "-y", command}); count != 1 {
+		if count := runtime.sawExecCount([]string{drushExecutable, "-y", command}); count != 1 {
 			t.Fatalf("%s calls = %d, want completed phase not to repeat", command, count)
 		}
 	}
@@ -720,7 +720,7 @@ func (r *fakeSolrConfigRuntime) ExecCapture(_ context.Context, _, _ string, argv
 	if len(argv) == 0 {
 		return "", nil
 	}
-	if argv[0] == "drush" {
+	if argv[0] == drushExecutable {
 		if len(argv) > 1 && argv[1] == "pm:list" {
 			if r.moduleEnabled {
 				return `{"search_api_solr":{"status":"Enabled"}}`, nil
@@ -902,7 +902,7 @@ func (r *fakeSolrConfigRuntime) moveFakePath(source, destination string) error {
 
 func (r *fakeSolrConfigRuntime) sawDrushConfigGeneration() bool {
 	for _, call := range r.execCalls {
-		if len(call) >= 3 && call[0] == "drush" && call[2] == "search-api-solr:get-server-config" {
+		if len(call) >= 3 && call[0] == drushExecutable && call[2] == "search-api-solr:get-server-config" {
 			return true
 		}
 	}

@@ -42,7 +42,7 @@ func TestRunDrupalVerifyChecksExecutesStrictApplicationAssertions(t *testing.T) 
 	if len(runtime.calls) != 5 {
 		t.Fatalf("got %d command calls, want 5", len(runtime.calls))
 	}
-	if got := runtime.calls[3]; !reflect.DeepEqual(got, []string{"drush", "php:eval", drupalQueueProbe}) {
+	if got := runtime.calls[3]; !reflect.DeepEqual(got, []string{drushExecutable, "php:eval", drupalQueueProbe}) {
 		t.Fatalf("unexpected queue probe: %#v", got)
 	}
 }

@@ -54,7 +54,7 @@ func runDrupalVerifyChecks(ctx context.Context, runtime drupalVerifyRuntime, con
 	checks := []check{
 		{
 			name: "verify:drupal:bootstrap",
-			argv: []string{"drush", "status", "--field=bootstrap"},
+			argv: []string{drushExecutable, "status", "--field=bootstrap"},
 			read: func(output string) sitevalidate.Result {
 				if strings.EqualFold(strings.TrimSpace(output), "Successful") {
 					return verifyOK("verify:drupal:bootstrap", "Drupal bootstrapped successfully")
@@ -65,25 +65,25 @@ func runDrupalVerifyChecks(ctx context.Context, runtime drupalVerifyRuntime, con
 		},
 		{
 			name: "verify:drupal:database-identity",
-			argv: []string{"drush", "sql:query", "SELECT CURRENT_USER();", "--extra=--batch", "--extra=--skip-column-names"},
+			argv: []string{drushExecutable, "sql:query", "SELECT CURRENT_USER();", "--extra=--batch", "--extra=--skip-column-names"},
 			read: verifyDrupalDatabaseIdentity,
 			fix:  "mount only the scoped Drupal database password and recreate the application database user",
 		},
 		{
 			name: "verify:drupal:config-drift",
-			argv: []string{"drush", "config:status", "--format=json"},
+			argv: []string{drushExecutable, "config:status", "--format=json"},
 			read: verifyDrupalConfigDrift,
 			fix:  "export intentional configuration changes or import the committed configuration",
 		},
 		{
 			name: "verify:drupal:cron-queue",
-			argv: []string{"drush", "php:eval", drupalQueueProbe},
+			argv: []string{drushExecutable, "php:eval", drupalQueueProbe},
 			read: verifyDrupalCronQueue,
 			fix:  "repair Drupal cron and queue worker service discovery",
 		},
 		{
 			name: "verify:drupal:solr",
-			argv: []string{"drush", "search-api:server-status", "default_solr_server", "--format=json"},
+			argv: []string{drushExecutable, "search-api:server-status", "default_solr_server", "--format=json"},
 			read: verifyDrupalSolr,
 			fix:  "check the default_solr_server configuration and Solr connectivity",
 		},

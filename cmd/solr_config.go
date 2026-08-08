@@ -486,7 +486,7 @@ func generateSolrConfig(ctx context.Context, dependencies solrConfigDependencies
 	}()
 
 	_, err = dependencies.Runtime.ExecCapture(ctx, dependencies.DrupalContainer, dependencies.DrupalWorkingDir, []string{
-		"drush",
+		drushExecutable,
 		"-y",
 		"search-api-solr:get-server-config",
 		server,
@@ -685,7 +685,7 @@ func runDrupalSearchAPIIndexCommand(ctx context.Context, dependencies solrConfig
 	if command != "search-api:reset-tracker" && command != "search-api:index" {
 		return fmt.Errorf("unsupported Drupal Search API index command %q", command)
 	}
-	if _, err := dependencies.Runtime.ExecCapture(ctx, dependencies.DrupalContainer, dependencies.DrupalWorkingDir, []string{"drush", "-y", command}); err != nil {
+	if _, err := dependencies.Runtime.ExecCapture(ctx, dependencies.DrupalContainer, dependencies.DrupalWorkingDir, []string{drushExecutable, "-y", command}); err != nil {
 		return fmt.Errorf("run drush %s: %w", command, err)
 	}
 	return nil
@@ -693,7 +693,7 @@ func runDrupalSearchAPIIndexCommand(ctx context.Context, dependencies solrConfig
 
 func drupalSearchAPISolrEnabled(ctx context.Context, dependencies solrConfigDependencies) (bool, error) {
 	output, err := dependencies.Runtime.ExecCapture(ctx, dependencies.DrupalContainer, dependencies.DrupalWorkingDir, []string{
-		"drush",
+		drushExecutable,
 		"pm:list",
 		"--type=module",
 		"--status=enabled",

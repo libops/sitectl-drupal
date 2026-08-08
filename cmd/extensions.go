@@ -259,7 +259,7 @@ func renderCachePageSummary(runCtx context.Context) (string, error) {
 
 func readDrupalCacheTableSize(runCtx context.Context, cli *docker.DockerClient, containerName, containerRoot, tableName string) (int64, error) {
 	query := fmt.Sprintf("SELECT COALESCE(data_length + index_length, 0) FROM information_schema.TABLES WHERE table_schema = DATABASE() AND table_name = '%s';", strings.TrimSpace(tableName))
-	cmd := []string{"drush", "sql:query", query, "--extra=--batch", "--extra=--skip-column-names"}
+	cmd := []string{drushExecutable, "sql:query", query, "--extra=--batch", "--extra=--skip-column-names"}
 	slog.Debug(strings.Join(cmd, " "), "plugin", "drupal", "container", containerName)
 	output, err := docker.ExecCapture(runCtx, cli, containerName, containerRoot, cmd)
 	if err != nil {
