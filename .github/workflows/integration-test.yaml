@@ -35,7 +35,7 @@ jobs:
         uses: libops/.github/.github/actions/install-sitectl@94c6e17e0cdb3e9aa71292ba6dac2e96a74f2dcb # main
         with:
           packages: sitectl
-          package-versions: sitectl=1.8.0
+          package-versions: sitectl=1.8.1
           allow-unversioned: false
 
       - name: setup git identity
