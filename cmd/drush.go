@@ -31,7 +31,7 @@ Examples:
 		}
 		defer cli.Close()
 
-		drushArgs := append([]string{"drush"}, filteredArgs...)
+		drushArgs := append([]string{drushExecutable}, filteredArgs...)
 		exitCode, err := cli.Exec(cmd.Context(), docker.ExecOptions{
 			Container:    containerName,
 			Cmd:          drushArgs,

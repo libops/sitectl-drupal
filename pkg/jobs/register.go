@@ -23,7 +23,10 @@ var (
 	drupalService = "drupal"
 )
 
-const maxConfigArchiveBytes = 64 << 20
+const (
+	maxConfigArchiveBytes = 64 << 20
+	drushExecutable       = "/var/www/drupal/vendor/bin/drush"
+)
 
 func Register(s *plugin.SDK) {
 	sdk = s
@@ -121,7 +124,7 @@ func RunDBBackup(cmd *cobra.Command, ctx *config.Context, outputPath string) err
 	var stderr bytes.Buffer
 	exitCode, err := cli.Exec(cmd.Context(), docker.ExecOptions{
 		Container:    containerName,
-		Cmd:          []string{"drush", "sql-dump", "-y", "--skip-tables-list=cache,cache_*,watchdog", "--structure-tables-list=cache,cache_*,watchdog", "--debug"},
+		Cmd:          []string{drushExecutable, "sql-dump", "-y", "--skip-tables-list=cache,cache_*,watchdog", "--structure-tables-list=cache,cache_*,watchdog", "--debug"},
 		WorkingDir:   ctx.EffectiveDrupalContainerRoot(),
 		AttachStdout: true,
 		AttachStderr: true,
@@ -186,7 +189,7 @@ func RunDBImport(cmd *cobra.Command, ctx *config.Context, inputPath string, yolo
 	var stderr bytes.Buffer
 	exitCode, err := cli.Exec(cmd.Context(), docker.ExecOptions{
 		Container:    containerName,
-		Cmd:          []string{"drush", "sql:cli"},
+		Cmd:          []string{drushExecutable, "sql:cli"},
 		WorkingDir:   ctx.EffectiveDrupalContainerRoot(),
 		AttachStdin:  true,
 		AttachStdout: true,
@@ -201,7 +204,7 @@ func RunDBImport(cmd *cobra.Command, ctx *config.Context, inputPath string, yolo
 	if exitCode != 0 {
 		return fmt.Errorf("drupal sql import failed with exit code %d: %s", exitCode, strings.TrimSpace(stderr.String()))
 	}
-	_, err = docker.ExecCapture(cmd.Context(), cli, containerName, ctx.EffectiveDrupalContainerRoot(), []string{"drush", "cr", "-y"})
+	_, err = docker.ExecCapture(cmd.Context(), cli, containerName, ctx.EffectiveDrupalContainerRoot(), []string{drushExecutable, "cr", "-y"})
 	return err
 }
 
@@ -216,7 +219,7 @@ func RunConfigExport(cmd *cobra.Command, ctx *config.Context, outputPath string)
 	defer cli.Close()
 
 	containerRoot := ctx.EffectiveDrupalContainerRoot()
-	if _, err := docker.ExecCapture(cmd.Context(), cli, containerName, containerRoot, []string{"drush", "cex", "-y"}); err != nil {
+	if _, err := docker.ExecCapture(cmd.Context(), cli, containerName, containerRoot, []string{drushExecutable, "cex", "-y"}); err != nil {
 		return err
 	}
 
@@ -304,10 +307,10 @@ func RunConfigImport(cmd *cobra.Command, ctx *config.Context, inputPath, drupalR
 	}
 
 	containerRoot := ctx.EffectiveDrupalContainerRoot()
-	if _, err := docker.ExecCapture(cmd.Context(), cli, containerName, containerRoot, []string{"drush", "cim", "-y"}); err != nil {
+	if _, err := docker.ExecCapture(cmd.Context(), cli, containerName, containerRoot, []string{drushExecutable, "cim", "-y"}); err != nil {
 		return err
 	}
-	_, err = docker.ExecCapture(cmd.Context(), cli, containerName, containerRoot, []string{"drush", "cr", "-y"})
+	_, err = docker.ExecCapture(cmd.Context(), cli, containerName, containerRoot, []string{drushExecutable, "cr", "-y"})
 	return err
 }
 

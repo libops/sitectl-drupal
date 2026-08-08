@@ -37,6 +37,7 @@ func RegisterCommands(s *plugin.SDK) error {
 	})
 	sdk.RegisterDebugRunner(&drupalDebugRunner{})
 	sdk.RegisterHealthcheckRunner(drupalHealthcheckRunner)
+	sdk.RegisterVerifyRunner(&drupalVerifyRunner{})
 	sdk.RegisterIngressRouteProvider(plugin.StandardComposeWebIngressRoutesWithOptions(plugin.StandardComposeWebIngressOptions{
 		AppService: "drupal",
 		Router:     "drupal",
