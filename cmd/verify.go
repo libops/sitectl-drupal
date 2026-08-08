@@ -18,6 +18,8 @@ const drupalQueueProbe = `$cron = \Drupal::service('cron'); $workers = \Drupal::
 
 const drupalSolrProbe = `$server = \Drupal::entityTypeManager()->getStorage('search_api_server')->load('default_solr_server'); print json_encode(['exists' => $server !== NULL, 'enabled' => $server ? (bool) $server->status() : false, 'available' => $server ? (bool) $server->isAvailable() : false]);`
 
+const drupalConfigDriftProbe = `$active = \Drupal::service('config.storage'); $directory = \Drupal\Core\Site\Settings::get('config_sync_directory'); $result = []; if (is_string($directory) && $directory !== '') { $sync = new \Drupal\Core\Config\FileStorage($directory); $names = array_unique(array_merge($active->listAll(), $sync->listAll())); sort($names); foreach ($names as $name) { $active_data = $active->read($name); $sync_data = $sync->read($name); if (!is_array($active_data) || !is_array($sync_data) || $active_data === $sync_data) { continue; } $keys = array_unique(array_merge(array_keys($active_data), array_keys($sync_data))); sort($keys); foreach ($keys as $key) { if (!array_key_exists($key, $active_data) || !array_key_exists($key, $sync_data) || $active_data[$key] !== $sync_data[$key]) { $result[$name][] = $key; } } } } print json_encode($result);`
+
 type drupalVerifyRuntime interface {
 	ExecCapture(context.Context, string, string, []string) (string, error)
 }
@@ -99,9 +101,52 @@ func runDrupalVerifyChecks(ctx context.Context, runtime drupalVerifyRuntime, con
 			results = append(results, verifyFailed(check.name, err.Error(), check.fix))
 			continue
 		}
-		results = append(results, check.read(output))
+		result := check.read(output)
+		if check.name == "verify:drupal:config-drift" && result.Status == sitevalidate.StatusFailed {
+			probeOutput, probeErr := runtime.ExecCapture(ctx, container, workingDir, []string{drushExecutable, "php:eval", drupalConfigDriftProbe})
+			if probeErr == nil {
+				if differences := describeDrupalConfigDriftKeys(probeOutput); len(differences) > 0 {
+					result.Detail += "; differing top-level keys: " + strings.Join(differences, ", ")
+				}
+			}
+		}
+		results = append(results, result)
 	}
 	return results
+}
+
+func describeDrupalConfigDriftKeys(output string) []string {
+	var values map[string][]string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(output)), &values); err != nil {
+		return nil
+	}
+
+	differences := make([]string, 0, len(values))
+	for name, keys := range values {
+		name = strings.TrimSpace(name)
+		if name == "" || len(keys) == 0 {
+			continue
+		}
+		cleanKeys := make([]string, 0, len(keys))
+		for _, key := range keys {
+			if key = strings.TrimSpace(key); key != "" {
+				cleanKeys = append(cleanKeys, key)
+			}
+		}
+		if len(cleanKeys) == 0 {
+			continue
+		}
+		sort.Strings(cleanKeys)
+		if len(cleanKeys) > 10 {
+			cleanKeys = append(cleanKeys[:10], fmt.Sprintf("and %d more", len(cleanKeys)-10))
+		}
+		differences = append(differences, fmt.Sprintf("%s [%s]", name, strings.Join(cleanKeys, ", ")))
+	}
+	sort.Strings(differences)
+	if len(differences) > 10 {
+		differences = append(differences[:10], fmt.Sprintf("and %d more configurations", len(differences)-10))
+	}
+	return differences
 }
 
 func verifyDrupalDatabaseIdentity(output string) sitevalidate.Result {

@@ -22,6 +22,9 @@ func (r *fakeDrupalVerifyRuntime) ExecCapture(_ context.Context, _, _ string, ar
 	if key == "php:eval" && len(argv) > 2 && argv[2] == drupalSolrProbe {
 		key = "solr-probe"
 	}
+	if key == "php:eval" && len(argv) > 2 && argv[2] == drupalConfigDriftProbe {
+		key = "config-drift-probe"
+	}
 	return r.outputs[key], r.errors[key]
 }
 
@@ -56,10 +59,11 @@ func TestRunDrupalVerifyChecksExecutesStrictApplicationAssertions(t *testing.T) 
 
 func TestRunDrupalVerifyChecksReportsEveryFailedAssertion(t *testing.T) {
 	runtime := &fakeDrupalVerifyRuntime{outputs: map[string]string{
-		"status":        "Not bootstrapped",
-		"sql:query":     "root@localhost",
-		"config:status": `{"system.site":"Different"}`,
-		"php:eval":      `{"cron":false,"queue_workers":0}`,
+		"status":             "Not bootstrapped",
+		"sql:query":          "root@localhost",
+		"config:status":      `{"system.site":"Different"}`,
+		"config-drift-probe": `{"system.site":["name","uuid"]}`,
+		"php:eval":           `{"cron":false,"queue_workers":0}`,
 	}, errors: map[string]error{
 		"solr-probe": errors.New("Solr unavailable"),
 	}}
@@ -72,6 +76,9 @@ func TestRunDrupalVerifyChecksReportsEveryFailedAssertion(t *testing.T) {
 		if result.Status != sitevalidate.StatusFailed || result.FixHint == "" {
 			t.Fatalf("expected actionable failed result, got %#v", result)
 		}
+	}
+	if !strings.Contains(results[2].Detail, "system.site [name, uuid]") {
+		t.Fatalf("config drift did not report bounded field evidence: %#v", results[2])
 	}
 }
 
