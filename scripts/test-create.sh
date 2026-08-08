@@ -82,6 +82,7 @@ create_site() {
 
 run_healthcheck() {
 	HOME="${SITECTL_HOME}" sitectl healthcheck
+	HOME="${SITECTL_HOME}" sitectl verify --strict
 }
 
 main() {
