@@ -3,7 +3,7 @@ release:
   disable: "{{ .Env.GORELEASER_DISABLE_SCM_RELEASE }}"
 before:
   hooks:
-    - ./scripts/check-sitectl-core-version.sh v1.0.0
+    - ./scripts/check-sitectl-core-version.sh v1.8.1
     - go mod tidy
 builds:
   - binary: sitectl-drupal
@@ -77,10 +77,10 @@ nfpms:
     overrides:
       deb:
         dependencies:
-          - sitectl (>= 1.0.0)
+          - sitectl (>= 1.8.2)
       rpm:
         dependencies:
-          - sitectl >= 1.0.0
+          - sitectl >= 1.8.2
       apk:
         dependencies:
-          - sitectl>=1.0.0
+          - sitectl>=1.8.2
