@@ -4,7 +4,7 @@ go 1.26.1
 
 require (
 	github.com/docker/docker v28.5.2+incompatible
-	github.com/libops/sitectl v1.8.1
+	github.com/libops/sitectl v1.9.0
 	github.com/pkg/sftp v1.13.11
 	github.com/spf13/cobra v1.10.2
 	gopkg.in/yaml.v3 v3.0.1
