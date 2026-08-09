@@ -36,6 +36,7 @@ func RegisterCommands(s *plugin.SDK) error {
 		ReadyMessage:        "Drupal is ready for use through sitectl.",
 	})
 	sdk.RegisterDebugRunner(&drupalDebugRunner{})
+	sdk.RegisterDeployRunner(drupalDeployDefinition(), drupalDeployRunner{})
 	sdk.RegisterHealthcheckRunner(drupalHealthcheckRunner)
 	sdk.RegisterVerifyRunner(&drupalVerifyRunner{})
 	sdk.RegisterIngressRouteProvider(plugin.StandardComposeWebIngressRoutesWithOptions(plugin.StandardComposeWebIngressOptions{

@@ -14,12 +14,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const drupalQueueProbe = `$cron = \Drupal::service('cron'); $workers = \Drupal::service('plugin.manager.queue_worker')->getDefinitions(); print json_encode(['cron' => $cron !== NULL, 'queue_workers' => count($workers)]);`
-
-const drupalSolrProbe = `$server = \Drupal::entityTypeManager()->getStorage('search_api_server')->load('default_solr_server'); print json_encode(['exists' => $server !== NULL, 'enabled' => $server ? (bool) $server->status() : false, 'available' => $server ? (bool) $server->isAvailable() : false]);`
-
-const drupalConfigDriftProbe = `$active = \Drupal::service('config.storage'); $directory = \Drupal\Core\Site\Settings::get('config_sync_directory'); $result = []; if (is_string($directory) && $directory !== '') { $sync = new \Drupal\Core\Config\FileStorage($directory); $names = array_unique(array_merge($active->listAll(), $sync->listAll())); sort($names); foreach ($names as $name) { $active_data = $active->read($name); $sync_data = $sync->read($name); if (!is_array($active_data) || !is_array($sync_data) || $active_data === $sync_data) { continue; } $keys = array_unique(array_merge(array_keys($active_data), array_keys($sync_data))); sort($keys); foreach ($keys as $key) { if (!array_key_exists($key, $active_data) || !array_key_exists($key, $sync_data) || $active_data[$key] !== $sync_data[$key]) { $result[$name][] = $key; } } } } print json_encode($result);`
-
 type drupalVerifyRuntime interface {
 	ExecCapture(context.Context, string, string, []string) (string, error)
 }
@@ -49,6 +43,10 @@ func (r *drupalVerifyRunner) Run(cmd *cobra.Command, _ *config.Context) ([]sitev
 var _ plugin.VerifyRunner = (*drupalVerifyRunner)(nil)
 
 func runDrupalVerifyChecks(ctx context.Context, runtime drupalVerifyRuntime, container, workingDir string) []sitevalidate.Result {
+	if missing := drupalMissingTemplateProgram(ctx, runtime, container, workingDir); missing != nil {
+		return []sitevalidate.Result{*missing}
+	}
+
 	type check struct {
 		name string
 		argv []string
@@ -82,13 +80,13 @@ func runDrupalVerifyChecks(ctx context.Context, runtime drupalVerifyRuntime, con
 		},
 		{
 			name: "verify:drupal:cron-queue",
-			argv: []string{drushExecutable, "php:eval", drupalQueueProbe},
+			argv: []string{drushExecutable, "php:script", drupalVerifyCronQueueTarget},
 			read: verifyDrupalCronQueue,
 			fix:  "repair Drupal cron and queue worker service discovery",
 		},
 		{
 			name: "verify:drupal:solr",
-			argv: []string{drushExecutable, "php:eval", drupalSolrProbe},
+			argv: []string{drushExecutable, "php:script", drupalVerifySolrTarget},
 			read: verifyDrupalSolr,
 			fix:  "check the default_solr_server configuration and Solr connectivity",
 		},
@@ -103,7 +101,7 @@ func runDrupalVerifyChecks(ctx context.Context, runtime drupalVerifyRuntime, con
 		}
 		result := check.read(output)
 		if check.name == "verify:drupal:config-drift" && result.Status == sitevalidate.StatusFailed {
-			probeOutput, probeErr := runtime.ExecCapture(ctx, container, workingDir, []string{drushExecutable, "php:eval", drupalConfigDriftProbe})
+			probeOutput, probeErr := runtime.ExecCapture(ctx, container, workingDir, []string{drushExecutable, "php:script", drupalVerifyConfigDriftTarget})
 			if probeErr == nil {
 				if differences := describeDrupalConfigDriftKeys(probeOutput); len(differences) > 0 {
 					result.Detail += "; differing top-level keys: " + strings.Join(differences, ", ")
@@ -113,6 +111,24 @@ func runDrupalVerifyChecks(ctx context.Context, runtime drupalVerifyRuntime, con
 		results = append(results, result)
 	}
 	return results
+}
+
+func drupalMissingTemplateProgram(ctx context.Context, runtime drupalVerifyRuntime, container, workingDir string) *sitevalidate.Result {
+	for _, program := range drupalTemplatePrograms {
+		probe := "-r"
+		if program.executable {
+			probe = "-x"
+		}
+		if _, err := runtime.ExecCapture(ctx, container, workingDir, []string{"test", probe, program.target}); err != nil {
+			result := verifyFailed(
+				"verify:drupal:template-programs",
+				fmt.Sprintf("required template program %s is missing or unusable", program.target),
+				fmt.Sprintf("update this site checkout from %s at %s or newer before using this plugin release", drupalCreateRepo, drupalTemplateVersion),
+			)
+			return &result
+		}
+	}
+	return nil
 }
 
 func describeDrupalConfigDriftKeys(output string) []string {

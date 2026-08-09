@@ -19,22 +19,21 @@ type fakeDrupalVerifyRuntime struct {
 func (r *fakeDrupalVerifyRuntime) ExecCapture(_ context.Context, _, _ string, argv []string) (string, error) {
 	r.calls = append(r.calls, append([]string(nil), argv...))
 	key := argv[1]
-	if key == "php:eval" && len(argv) > 2 && argv[2] == drupalSolrProbe {
-		key = "solr-probe"
-	}
-	if key == "php:eval" && len(argv) > 2 && argv[2] == drupalConfigDriftProbe {
-		key = "config-drift-probe"
+	if argv[0] == "test" {
+		key = "test:" + argv[2]
+	} else if key == "php:script" && len(argv) > 2 {
+		key = argv[2]
 	}
 	return r.outputs[key], r.errors[key]
 }
 
 func TestRunDrupalVerifyChecksExecutesStrictApplicationAssertions(t *testing.T) {
 	runtime := &fakeDrupalVerifyRuntime{outputs: map[string]string{
-		"status":        "Successful\n",
-		"sql:query":     "drupal@%\n",
-		"config:status": "[]\n",
-		"php:eval":      `{"cron":true,"queue_workers":4}`,
-		"solr-probe":    `{"exists":true,"enabled":true,"available":true}`,
+		"status":                    "Successful\n",
+		"sql:query":                 "drupal@%\n",
+		"config:status":             "[]\n",
+		drupalVerifyCronQueueTarget: `{"cron":true,"queue_workers":4}`,
+		drupalVerifySolrTarget:      `{"exists":true,"enabled":true,"available":true}`,
 	}, errors: map[string]error{}}
 
 	results := runDrupalVerifyChecks(context.Background(), runtime, "site-drupal-1", "/var/www/drupal")
@@ -46,26 +45,26 @@ func TestRunDrupalVerifyChecksExecutesStrictApplicationAssertions(t *testing.T) 
 			t.Fatalf("result %q was not ok: %#v", result.Name, result)
 		}
 	}
-	if len(runtime.calls) != 5 {
-		t.Fatalf("got %d command calls, want 5", len(runtime.calls))
+	if len(runtime.calls) != len(drupalTemplatePrograms)+5 {
+		t.Fatalf("got %d command calls, want %d", len(runtime.calls), len(drupalTemplatePrograms)+5)
 	}
-	if got := runtime.calls[3]; !reflect.DeepEqual(got, []string{drushExecutable, "php:eval", drupalQueueProbe}) {
+	if got := runtime.calls[len(drupalTemplatePrograms)+3]; !reflect.DeepEqual(got, []string{drushExecutable, "php:script", drupalVerifyCronQueueTarget}) {
 		t.Fatalf("unexpected queue probe: %#v", got)
 	}
-	if got := runtime.calls[4]; !reflect.DeepEqual(got, []string{drushExecutable, "php:eval", drupalSolrProbe}) {
+	if got := runtime.calls[len(drupalTemplatePrograms)+4]; !reflect.DeepEqual(got, []string{drushExecutable, "php:script", drupalVerifySolrTarget}) {
 		t.Fatalf("unexpected Solr probe: %#v", got)
 	}
 }
 
 func TestRunDrupalVerifyChecksReportsEveryFailedAssertion(t *testing.T) {
 	runtime := &fakeDrupalVerifyRuntime{outputs: map[string]string{
-		"status":             "Not bootstrapped",
-		"sql:query":          "root@localhost",
-		"config:status":      `{"system.site":"Different"}`,
-		"config-drift-probe": `{"system.site":["name","uuid"]}`,
-		"php:eval":           `{"cron":false,"queue_workers":0}`,
+		"status":                      "Not bootstrapped",
+		"sql:query":                   "root@localhost",
+		"config:status":               `{"system.site":"Different"}`,
+		drupalVerifyConfigDriftTarget: `{"system.site":["name","uuid"]}`,
+		drupalVerifyCronQueueTarget:   `{"cron":false,"queue_workers":0}`,
 	}, errors: map[string]error{
-		"solr-probe": errors.New("Solr unavailable"),
+		drupalVerifySolrTarget: errors.New("Solr unavailable"),
 	}}
 
 	results := runDrupalVerifyChecks(context.Background(), runtime, "site-drupal-1", "/var/www/drupal")
@@ -79,6 +78,28 @@ func TestRunDrupalVerifyChecksReportsEveryFailedAssertion(t *testing.T) {
 	}
 	if !strings.Contains(results[2].Detail, "system.site [name, uuid]") {
 		t.Fatalf("config drift did not report bounded field evidence: %#v", results[2])
+	}
+}
+
+func TestRunDrupalVerifyChecksFailsClearlyForOlderTemplate(t *testing.T) {
+	runtime := &fakeDrupalVerifyRuntime{
+		outputs: map[string]string{},
+		errors: map[string]error{
+			"test:" + drupalVerifyConfigDriftTarget: errors.New("missing"),
+		},
+	}
+
+	results := runDrupalVerifyChecks(context.Background(), runtime, "site-drupal-1", "/var/www/drupal")
+	if len(results) != 1 || results[0].Name != "verify:drupal:template-programs" || results[0].Status != sitevalidate.StatusFailed {
+		t.Fatalf("unexpected compatibility result: %#v", results)
+	}
+	for _, want := range []string{drupalVerifyConfigDriftTarget, drupalCreateRepo, drupalTemplateVersion} {
+		if !strings.Contains(results[0].Detail+" "+results[0].FixHint, want) {
+			t.Fatalf("compatibility result omitted %q: %#v", want, results[0])
+		}
+	}
+	if len(runtime.calls) != 3 {
+		t.Fatalf("verification continued after missing program: %#v", runtime.calls)
 	}
 }
 
