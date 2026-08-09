@@ -4,7 +4,7 @@ import "github.com/libops/sitectl/pkg/plugin"
 
 const (
 	drupalCreateRepo       = "https://github.com/libops/drupal"
-	drupalCreateBranch     = "v1.1.0"
+	drupalCreateBranch     = drupalTemplateVersion
 	drupalCreateDrupalRoot = "."
 	drupalContainerRoot    = "/var/www/drupal"
 	drushExecutable        = "/var/www/drupal/vendor/bin/drush"
@@ -31,6 +31,7 @@ func createDefinition() plugin.CreateSpec {
 			"mkdir -p ./certs",
 			"id -u > ./certs/UID",
 			"docker compose run --rm -e HOST_UID=\"$(id -u)\" -e HOST_GID=\"$(id -g)\" init",
+			drupalRolloutPreflightCommand,
 		},
 		InitArtifacts: []plugin.InitArtifact{
 			{Path: "certs/cert.pem"},
@@ -49,9 +50,8 @@ func createDefinition() plugin.CreateSpec {
 			"docker compose pull --ignore-buildable --quiet || docker compose pull --ignore-buildable",
 			"docker compose build --pull",
 			"docker compose up --remove-orphans --pull missing --quiet-pull -d drupal",
-			"docker compose exec -T drupal sh -c 'attempt=0; until test -f /installed; do attempt=$((attempt + 1)); if [ \"$attempt\" -ge 150 ]; then echo \"Drupal did not become ready for database migration within 5 minutes\" >&2; exit 1; fi; sleep 2; done'",
-			"docker compose exec -T drupal /var/www/drupal/vendor/bin/drush updb -y",
-			"docker compose exec -T drupal /var/www/drupal/vendor/bin/drush cr",
+			"docker compose exec -T drupal " + drupalWaitInstalledTarget,
+			"docker compose exec -T drupal " + drupalMigrationTarget,
 			"docker compose up --remove-orphans --wait --wait-timeout 600 --pull missing --quiet-pull -d",
 		},
 	}

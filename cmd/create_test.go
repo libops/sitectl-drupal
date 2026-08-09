@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -21,11 +22,14 @@ func TestCreateDefinition(t *testing.T) {
 	if !spec.Default {
 		t.Fatal("expected Drupal create definition to be the default")
 	}
-	if len(spec.DockerComposeInit) != 3 || spec.DockerComposeInit[0] != "mkdir -p ./certs" {
-		t.Fatalf("expected inline init create commands, got %+v", spec.DockerComposeInit)
+	if len(spec.DockerComposeInit) != 4 || spec.DockerComposeInit[0] != "mkdir -p ./certs" {
+		t.Fatalf("expected init create commands, got %+v", spec.DockerComposeInit)
 	}
 	if spec.DockerComposeInit[2] != "docker compose run --rm -e HOST_UID=\"$(id -u)\" -e HOST_GID=\"$(id -g)\" init" {
 		t.Fatalf("expected init service command, got %+v", spec.DockerComposeInit)
+	}
+	if spec.DockerComposeInit[3] != drupalRolloutPreflightCommand {
+		t.Fatalf("expected the checked-in template preflight after initialization, got %+v", spec.DockerComposeInit)
 	}
 	var foundUID bool
 	for _, artifact := range spec.InitArtifacts {
@@ -45,43 +49,38 @@ func TestCreateDefinition(t *testing.T) {
 	if len(spec.DockerComposeUp) != 1 || !strings.Contains(spec.DockerComposeUp[0], "--wait --wait-timeout 600") {
 		t.Fatalf("create must wait for service health before reporting ready: %+v", spec.DockerComposeUp)
 	}
-	if len(spec.DockerComposeRollout) == 0 || spec.DockerComposeRollout[0] == "./scripts/rollout.sh" {
-		t.Fatalf("expected inline rollout commands, got %+v", spec.DockerComposeRollout)
+	if len(spec.DockerComposeRollout) != 6 {
+		t.Fatalf("unexpected rollout commands: %+v", spec.DockerComposeRollout)
 	}
-	foundMigration := false
-	for index, command := range spec.DockerComposeRollout {
-		if !strings.Contains(command, "drush updb") {
-			continue
-		}
-		foundMigration = true
-		if strings.Contains(command, "||") || index < 2 || !strings.Contains(spec.DockerComposeRollout[index-1], "test -f /installed") || !strings.Contains(spec.DockerComposeRollout[index-1], "-ge 150") {
-			t.Fatalf("Drupal migration must fail hard after bounded readiness: %+v", spec.DockerComposeRollout)
-		}
-		initialStart := spec.DockerComposeRollout[index-2]
-		wantInitialStart := "docker compose up --remove-orphans --pull missing --quiet-pull -d drupal"
-		if initialStart != wantInitialStart ||
-			!strings.HasSuffix(initialStart, " -d drupal") ||
-			strings.Contains(initialStart, "--wait") {
-			t.Fatalf("initial rollout start must target only Drupal without waiting: %q", initialStart)
-		}
-		if index+2 >= len(spec.DockerComposeRollout) {
-			t.Fatalf("cache rebuild and final health wait must follow migration: %+v", spec.DockerComposeRollout)
-		}
-		cacheRebuild := spec.DockerComposeRollout[index+1]
-		if !strings.Contains(cacheRebuild, "drush cr") || strings.Contains(cacheRebuild, "||") {
-			t.Fatalf("Drupal cache rebuild must fail the rollout when it fails: %+v", spec.DockerComposeRollout)
-		}
-		finalStart := spec.DockerComposeRollout[index+2]
-		wantFinalStart := "docker compose up --remove-orphans --wait --wait-timeout 600 --pull missing --quiet-pull -d"
-		if finalStart != wantFinalStart ||
-			!strings.Contains(finalStart, "--wait --wait-timeout 600") ||
-			!strings.HasSuffix(finalStart, " -d") ||
-			strings.Contains(finalStart, "||") {
-			t.Fatalf("final rollout start must wait for the full stack and fail hard: %q", finalStart)
-		}
+	wantInitialStart := "docker compose up --remove-orphans --pull missing --quiet-pull -d drupal"
+	if spec.DockerComposeRollout[2] != wantInitialStart || strings.Contains(spec.DockerComposeRollout[2], "--wait") {
+		t.Fatalf("initial rollout start must target only Drupal without waiting: %q", spec.DockerComposeRollout[2])
 	}
-	if !foundMigration {
-		t.Fatalf("Drupal rollout must run the database migration: %+v", spec.DockerComposeRollout)
+	if spec.DockerComposeRollout[3] != "docker compose exec -T drupal "+drupalWaitInstalledTarget {
+		t.Fatalf("rollout must invoke the checked-in bounded readiness program: %+v", spec.DockerComposeRollout)
+	}
+	if spec.DockerComposeRollout[4] != "docker compose exec -T drupal "+drupalMigrationTarget || strings.Contains(spec.DockerComposeRollout[4], "||") {
+		t.Fatalf("rollout must invoke the checked-in fail-hard migration program: %+v", spec.DockerComposeRollout)
+	}
+	wantFinalStart := "docker compose up --remove-orphans --wait --wait-timeout 600 --pull missing --quiet-pull -d"
+	if spec.DockerComposeRollout[5] != wantFinalStart || strings.Contains(spec.DockerComposeRollout[5], "||") {
+		t.Fatalf("final rollout start must wait for the full stack and fail hard: %q", spec.DockerComposeRollout[5])
+	}
+}
+
+func TestCreateAndVerifySourcesDoNotEmbedContainerPrograms(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range []string{"create.go", "verify.go"} {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("ReadFile(%s) error = %v", name, err)
+		}
+		for _, forbidden := range []string{"php:eval", "until test -f /installed", "sh -c '"} {
+			if strings.Contains(string(data), forbidden) {
+				t.Fatalf("%s embeds forbidden container program fragment %q", name, forbidden)
+			}
+		}
 	}
 }
 
@@ -101,6 +100,9 @@ func TestRegisterCommandsKeepsCoreLifecycleCommandsOutOfPlugin(t *testing.T) {
 		if !hasRootCommand(sdk, name) {
 			t.Fatalf("expected plugin command %q to be registered", name)
 		}
+	}
+	if len(sdk.DeployDefinitions()) != 1 || sdk.DeployDefinitions()[0].Name != "default" {
+		t.Fatalf("expected the Drupal template compatibility deploy hook, got %+v", sdk.DeployDefinitions())
 	}
 
 }
