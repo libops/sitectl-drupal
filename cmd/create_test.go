@@ -19,6 +19,9 @@ func TestCreateDefinition(t *testing.T) {
 	if spec.DockerComposeBranch != drupalCreateBranch {
 		t.Fatalf("expected branch %q, got %q", drupalCreateBranch, spec.DockerComposeBranch)
 	}
+	if spec.DockerComposeBranch != "v1.2.1" {
+		t.Fatalf("Drupal template revision = %q, want immutable v1.2.1", spec.DockerComposeBranch)
+	}
 	if !spec.Default {
 		t.Fatal("expected Drupal create definition to be the default")
 	}

@@ -1,7 +1,7 @@
 package cmd
 
 const (
-	drupalTemplateVersion = "v1.2.0"
+	drupalTemplateVersion = "v1.2.1"
 
 	drupalRolloutPreflightSource  = "scripts/sitectl-rollout-preflight.sh"
 	drupalRolloutPreflightCommand = "bash " + drupalRolloutPreflightSource
