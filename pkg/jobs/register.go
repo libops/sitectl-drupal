@@ -24,8 +24,23 @@ var (
 )
 
 const (
-	maxConfigArchiveBytes = 64 << 20
-	drushExecutable       = "/var/www/drupal/vendor/bin/drush"
+	maxConfigArchiveBytes           = 64 << 20
+	maxCompressedConfigArchiveBytes = 64 << 20
+	drushExecutable                 = "/var/www/drupal/vendor/bin/drush"
+	crosswalkConfigSnapshotScript   = `set -eu
+set --
+for file in \
+  config/sync/system.site.yml \
+  config/sync/field.storage.*.yml \
+  config/sync/field.field.*.yml \
+  config/sync/rdf.mapping.*.yml
+do
+  if [ -f "$file" ]; then
+    set -- "$@" "$file"
+  fi
+done
+[ "$#" -gt 0 ]
+tar -czf - "$@"`
 )
 
 func Register(s *plugin.SDK) {
@@ -212,16 +227,6 @@ func RunConfigExport(cmd *cobra.Command, ctx *config.Context, outputPath string)
 	if err := corejob.EnsurePathAbsentOnContext(ctx, outputPath); err != nil {
 		return err
 	}
-	_, cli, containerName, err := getDrupalContainerForContext(cmd.Context(), ctx)
-	if err != nil {
-		return err
-	}
-	defer cli.Close()
-
-	containerRoot := ctx.EffectiveDrupalContainerRoot()
-	if _, err := docker.ExecCapture(cmd.Context(), cli, containerName, containerRoot, []string{drushExecutable, "cex", "-y"}); err != nil {
-		return err
-	}
 
 	tempFile, err := os.CreateTemp("", "sitectl-drupal-config-export-*.tar.gz")
 	if err != nil {
@@ -231,26 +236,95 @@ func RunConfigExport(cmd *cobra.Command, ctx *config.Context, outputPath string)
 	defer os.Remove(tempPath)
 	defer tempFile.Close()
 
-	var stderr bytes.Buffer
-	exitCode, err := cli.Exec(cmd.Context(), docker.ExecOptions{
-		Container:    containerName,
-		Cmd:          []string{"tar", "-czf", "-", "config/sync"},
-		WorkingDir:   containerRoot,
-		AttachStdout: true,
-		AttachStderr: true,
-		Stdout:       tempFile,
-		Stderr:       &stderr,
-	})
-	if err != nil {
+	if err := WriteConfigExport(cmd, ctx, tempFile); err != nil {
 		return err
-	}
-	if exitCode != 0 {
-		return fmt.Errorf("drupal config export failed with exit code %d: %s", exitCode, strings.TrimSpace(stderr.String()))
 	}
 	if err := tempFile.Close(); err != nil {
 		return err
 	}
 	return ctx.UploadFile(tempPath, outputPath)
+}
+
+// WriteConfigExport exports active Drupal configuration and writes a bounded
+// gzip-compressed config/sync tar stream to output. The caller owns output.
+func WriteConfigExport(cmd *cobra.Command, ctx *config.Context, output io.Writer) error {
+	return writeActiveConfigArchive(cmd, ctx, output, []string{"tar", "-czf", "-", "config/sync"})
+}
+
+// WriteCrosswalkConfigSnapshot exports active Drupal configuration and writes
+// only the model inputs Crosswalk understands. Limiting the artifact to site,
+// field, and RDF mapping documents keeps unrelated operational configuration
+// and credential-bearing environment values outside the profile workflow.
+func WriteCrosswalkConfigSnapshot(cmd *cobra.Command, ctx *config.Context, output io.Writer) error {
+	return writeActiveConfigArchive(cmd, ctx, output, []string{"sh", "-c", crosswalkConfigSnapshotScript})
+}
+
+func writeActiveConfigArchive(cmd *cobra.Command, ctx *config.Context, output io.Writer, archiveCommand []string) error {
+	if output == nil {
+		return fmt.Errorf("Drupal config export output is required")
+	}
+	if len(archiveCommand) == 0 {
+		return fmt.Errorf("Drupal config archive command is required")
+	}
+	_, cli, containerName, err := getDrupalContainerForContext(cmd.Context(), ctx)
+	if err != nil {
+		return err
+	}
+	defer cli.Close()
+
+	containerRoot := ctx.EffectiveDrupalContainerRoot()
+	if _, err := docker.ExecCapture(cmd.Context(), cli, containerName, containerRoot, []string{drushExecutable, "cex", "-y"}); err != nil {
+		return fmt.Errorf("export active Drupal configuration with Drush: %w", err)
+	}
+
+	var stderr bytes.Buffer
+	archiveWriter := &maximumBytesWriter{
+		writer:    output,
+		remaining: maxCompressedConfigArchiveBytes,
+		maximum:   maxCompressedConfigArchiveBytes,
+	}
+	exitCode, err := cli.Exec(cmd.Context(), docker.ExecOptions{
+		Container:    containerName,
+		Cmd:          archiveCommand,
+		WorkingDir:   containerRoot,
+		AttachStdout: true,
+		AttachStderr: true,
+		Stdout:       archiveWriter,
+		Stderr:       &stderr,
+	})
+	if err != nil {
+		return fmt.Errorf("stream Drupal config export: %w", err)
+	}
+	if exitCode != 0 {
+		return fmt.Errorf("drupal config export failed with exit code %d: %s", exitCode, strings.TrimSpace(stderr.String()))
+	}
+	return nil
+}
+
+type maximumBytesWriter struct {
+	writer    io.Writer
+	remaining int64
+	maximum   int64
+}
+
+func (w *maximumBytesWriter) Write(data []byte) (int, error) {
+	if int64(len(data)) <= w.remaining {
+		n, err := w.writer.Write(data)
+		w.remaining -= int64(n)
+		return n, err
+	}
+
+	allowed := int(w.remaining)
+	written := 0
+	if allowed > 0 {
+		n, err := w.writer.Write(data[:allowed])
+		written += n
+		w.remaining -= int64(n)
+		if err != nil {
+			return written, err
+		}
+	}
+	return written, fmt.Errorf("Drupal config export exceeds %d compressed bytes", w.maximum)
 }
 
 func RunConfigImport(cmd *cobra.Command, ctx *config.Context, inputPath, drupalRootfs string) error {

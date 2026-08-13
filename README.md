@@ -6,10 +6,11 @@ Documentation: https://sitectl.libops.io/plugins/drupal
 
 ## Requirements
 
-- [`sitectl`](https://sitectl.libops.io/install) v1.8.2 or newer, using RPC protocol 1.
+- [`sitectl`](https://sitectl.libops.io/install) v1.9.0 or newer, using RPC protocol 1.
 - Docker with the Compose v2 plugin for local Drupal sites.
 - No additional app-plugin dependency beyond core `sitectl`.
 - Drupal template v1.2.0 or newer for the versioned rollout and verification programs required by `sitectl-drupal` v1.4.0 and newer.
+- [`crosswalk`](https://github.com/lehigh-university-libraries/crosswalk) on `PATH`, or configured with `SITECTL_CROSSWALK_BINARY`, when using the optional metadata profile and service commands.
 
 ## Quick Start
 
@@ -57,6 +58,45 @@ sitectl set dev-mode enabled
 ```
 
 See the [Drupal plugin docs](https://sitectl.libops.io/plugins/drupal) for Drush, sync, ULI, and Drupal-specific workflows.
+
+## Crosswalk Profile Lifecycle
+
+Use sitectl to export the active Drupal configuration and create an editable
+Crosswalk profile draft. The command stores the immutable Drupal model in the
+selected Crosswalk configuration directory, but intentionally does not publish
+the generated mappings:
+
+```bash
+sitectl drupal crosswalk profile create repository-items \
+  --bundle islandora_object \
+  --config-dir "$PWD/.crosswalk" \
+  --output repository-items.draft.yaml
+```
+
+Review and edit the draft before sealing and publishing it with Crosswalk. Both
+commands must use the same configuration directory so validation can load the
+exact model captured from Drupal:
+
+```bash
+crosswalk profile validate \
+  --config-dir "$PWD/.crosswalk" \
+  --input repository-items.draft.yaml \
+  --output repository-items.sealed.yaml
+
+crosswalk profile publish \
+  --config-dir "$PWD/.crosswalk" \
+  --input repository-items.sealed.yaml
+```
+
+After publication, sitectl can resolve the selected context's named JSON:API
+route and pass it to Crosswalk without placing credentials in process arguments:
+
+```bash
+sitectl drupal crosswalk serve \
+  --config-dir "$PWD/.crosswalk" \
+  --drupal-profile repository-items \
+  --drupal-token-env DRUPAL_JSONAPI_TOKEN
+```
 
 ## License
 
