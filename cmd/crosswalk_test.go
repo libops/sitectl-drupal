@@ -255,6 +255,7 @@ func TestCrosswalkServeFailsClosedForProfileAndEndpointOverrides(t *testing.T) {
 		{name: "missing profile value", args: []string{"serve", "--drupal-profile", "--address=:9090"}, want: "--drupal-profile is required"},
 		{name: "managed endpoint", args: []string{"serve", "--drupal-profile", "items", "--drupal-jsonapi", "https://other.example/jsonapi"}, want: "managed by sitectl"},
 		{name: "blank context", args: []string{"serve", "--context=", "--drupal-profile", "items"}, want: "--context requires a value"},
+		{name: "missing context value", args: []string{"serve", "--context", "--drupal-profile", "items"}, want: "--context requires a value"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

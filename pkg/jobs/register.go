@@ -261,10 +261,10 @@ func WriteCrosswalkConfigSnapshot(cmd *cobra.Command, ctx *config.Context, outpu
 
 func writeActiveConfigArchive(cmd *cobra.Command, ctx *config.Context, output io.Writer, archiveCommand []string) error {
 	if output == nil {
-		return fmt.Errorf("Drupal config export output is required")
+		return fmt.Errorf("drupal config export output is required")
 	}
 	if len(archiveCommand) == 0 {
-		return fmt.Errorf("Drupal config archive command is required")
+		return fmt.Errorf("drupal config archive command is required")
 	}
 	_, cli, containerName, err := getDrupalContainerForContext(cmd.Context(), ctx)
 	if err != nil {
@@ -324,7 +324,7 @@ func (w *maximumBytesWriter) Write(data []byte) (int, error) {
 			return written, err
 		}
 	}
-	return written, fmt.Errorf("Drupal config export exceeds %d compressed bytes", w.maximum)
+	return written, fmt.Errorf("drupal config export exceeds %d compressed bytes", w.maximum)
 }
 
 func RunConfigImport(cmd *cobra.Command, ctx *config.Context, inputPath, drupalRootfs string) error {

@@ -207,6 +207,7 @@ func runCrosswalkServe(command *cobra.Command, args []string, runtime crosswalkR
 	if err != nil {
 		return fmt.Errorf("read --context: %w", err)
 	}
+	// Check raw arguments because GetContextFromArgs consumes a following flag as the context value.
 	if optionMissingValue(args, "--context") {
 		return fmt.Errorf("--context requires a value")
 	}
@@ -235,7 +236,7 @@ func runCrosswalkServe(command *cobra.Command, args []string, runtime crosswalkR
 
 func acquireCrosswalkConfigSnapshot(command *cobra.Command, ctx *config.Context) (string, func(), error) {
 	if ctx == nil {
-		return "", nil, fmt.Errorf("Drupal context is required")
+		return "", nil, fmt.Errorf("drupal context is required")
 	}
 	file, err := os.CreateTemp("", "sitectl-drupal-crosswalk-*.tar.gz")
 	if err != nil {
@@ -304,7 +305,7 @@ func runCrosswalk(command *cobra.Command, operation string, arguments []string) 
 		if errors.Is(err, context.Canceled) {
 			return err
 		}
-		return fmt.Errorf("Crosswalk %s failed: %w", operation, err)
+		return fmt.Errorf("crosswalk %s failed: %w", operation, err)
 	}
 	return nil
 }
