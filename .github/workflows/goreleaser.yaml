@@ -36,4 +36,4 @@ jobs:
       release-mode: ${{ github.ref_type == 'tag' && 'full' || inputs.release-mode }}
       release-version: ${{ inputs.release-version }}
       package-name: sitectl-drupal
-      sitectl-ref: e0c99fb76bba65049865b4270bc0bcbabab9c3ed # v1.9.0
+      sitectl-ref: b59060469c3e1bd95105405107f4a3c9290b8f99 # v1.10.0

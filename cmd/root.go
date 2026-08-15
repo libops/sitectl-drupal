@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/libops/sitectl-drupal/pkg/endpoint"
 	pluginjobs "github.com/libops/sitectl-drupal/pkg/jobs"
 	"github.com/libops/sitectl/pkg/plugin"
 )
@@ -39,11 +40,9 @@ func RegisterCommands(s *plugin.SDK) error {
 	sdk.RegisterDeployRunner(drupalDeployDefinition(), drupalDeployRunner{})
 	sdk.RegisterHealthcheckRunner(drupalHealthcheckRunner)
 	sdk.RegisterVerifyRunner(&drupalVerifyRunner{})
-	sdk.RegisterIngressRouteProvider(plugin.StandardComposeWebIngressRoutesWithOptions(plugin.StandardComposeWebIngressOptions{
-		AppService: "drupal",
-		Router:     "drupal",
-	}))
+	sdk.RegisterIngressRouteProvider(endpoint.Provider())
 	sdk.AddCommand(composerCmd)
+	sdk.AddCommand(newCrosswalkCmd(defaultCrosswalkRuntime()))
 	sdk.AddCommand(drushCmd)
 	sdk.AddCommand(loginCmd)
 	sdk.AddCommand(solrConfigCmd)

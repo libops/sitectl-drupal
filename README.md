@@ -6,10 +6,11 @@ Documentation: https://sitectl.libops.io/plugins/drupal
 
 ## Requirements
 
-- [`sitectl`](https://sitectl.libops.io/install) v1.8.2 or newer, using RPC protocol 1.
+- [`sitectl`](https://sitectl.libops.io/install) v1.10.0 or newer, using RPC protocol 1.
 - Docker with the Compose v2 plugin for local Drupal sites.
 - No additional app-plugin dependency beyond core `sitectl`.
 - Drupal template v1.2.0 or newer for the versioned rollout and verification programs required by `sitectl-drupal` v1.4.0 and newer.
+- [`crosswalk`](https://github.com/lehigh-university-libraries/crosswalk) on `PATH`, or configured with `SITECTL_CROSSWALK_BINARY`, when using the optional metadata profile and service commands.
 
 ## Quick Start
 

@@ -99,7 +99,7 @@ func TestRegisterCommandsKeepsCoreLifecycleCommandsOutOfPlugin(t *testing.T) {
 		}
 	}
 
-	for _, name := range []string{"composer", "drush", "uli", "sync"} {
+	for _, name := range []string{"composer", "crosswalk", "drush", "uli", "sync"} {
 		if !hasRootCommand(sdk, name) {
 			t.Fatalf("expected plugin command %q to be registered", name)
 		}
