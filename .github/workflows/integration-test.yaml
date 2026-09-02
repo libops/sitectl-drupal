@@ -29,7 +29,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
-          go-version: "1.26.x"
+          go-version: "1.27.x"
 
       - name: Install sitectl
         uses: libops/.github/.github/actions/install-sitectl@86054f5880f0b782dc1c3338895e1755e2c975f1 # main
